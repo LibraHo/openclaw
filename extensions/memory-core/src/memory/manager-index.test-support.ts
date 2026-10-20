@@ -61,6 +61,7 @@ type ProviderCall = {
 };
 
 type ProviderControls = {
+  beforeEmbedQuery: (() => Promise<void>) | null;
   embedQueryCalls: number;
   embeddedQueryTexts: string[];
   embedBatchCalls: number;
@@ -123,6 +124,7 @@ export type ManagerIndexFixture = {
 };
 
 const providerState = vi.hoisted(() => ({
+  beforeEmbedQuery: null as (() => Promise<void>) | null,
   embedQueryCalls: 0,
   embeddedQueryTexts: [] as string[],
   embedBatchCalls: 0,
@@ -267,6 +269,7 @@ vi.mock("./embeddings.js", async (importOriginal) => {
             }
           },
           embed: async (input: EmbeddingInput) => {
+            await providerState.beforeEmbedQuery?.();
             const text = typeof input === "string" ? input : input.text;
             providerState.embedQueryCalls += 1;
             providerState.embeddedQueryTexts.push(text);
@@ -561,6 +564,7 @@ export function createManagerIndexFixture(deps: {
   beforeEach(async () => {
     vi.useRealTimers();
     clearRegistry();
+    providerState.beforeEmbedQuery = null;
     providerState.embedQueryCalls = 0;
     providerState.embeddedQueryTexts = [];
     providerState.embedBatchCalls = 0;

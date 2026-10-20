@@ -134,8 +134,10 @@ RUN sh scripts/docker/verify-native-addons.sh
 ARG GIT_COMMIT=""
 ARG OPENCLAW_BUILD_TIMESTAMP=""
 ARG OPENCLAW_DOCKER_BUILD_VERSION=""
+ARG OPENCLAW_CONTROL_UI_BUILD_ID=""
 ENV GIT_COMMIT=${GIT_COMMIT} \
-    OPENCLAW_BUILD_TIMESTAMP=${OPENCLAW_BUILD_TIMESTAMP}
+    OPENCLAW_BUILD_TIMESTAMP=${OPENCLAW_BUILD_TIMESTAMP} \
+    OPENCLAW_CONTROL_UI_BUILD_ID=${OPENCLAW_CONTROL_UI_BUILD_ID}
 
 COPY . .
 
@@ -239,7 +241,9 @@ COPY --from=dependency-inputs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 # If you change these annotations, also update:
 # - docs/install/docker.md ("Base image metadata" section)
 # - https://docs.openclaw.ai/install/docker
-LABEL org.opencontainers.image.source="https://github.com/openclaw/openclaw" \
+LABEL io.openclaw.custom.release="2026.8.35-B" \
+  org.opencontainers.image.version="2026.8.35-B" \
+  org.opencontainers.image.source="https://github.com/openclaw/openclaw" \
   org.opencontainers.image.url="https://openclaw.ai" \
   org.opencontainers.image.documentation="https://docs.openclaw.ai/install/docker" \
   org.opencontainers.image.licenses="MIT" \

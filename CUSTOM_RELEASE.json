@@ -1,0 +1,26 @@
+{
+  "customRelease": "2026.8.35-B",
+  "upstreamVersion": "2026.8.35",
+  "upstreamCommit": "713ba5785d72d6ed1cec971e21307f16cc4234a6",
+  "previousRelease": "2026.8.35-A",
+  "previousSourceCommit": "280a57beb9848093bb635222265107c39ab917cb",
+  "previousImage": "sha256:94321427acef36f32b272ec819900c4927840858434703085cd64c3d727a5560",
+  "addedOfficialPRs": [
+    165072,
+    164649,
+    152210
+  ],
+  "preservedOfficialPRs": [
+    135919,
+    134219,
+    135863,
+    135985,
+    135516,
+    135083,
+    135973,
+    135925,
+    135849
+  ],
+  "interfaceBase": "unchanged 2026.8.35",
+  "dependencyAndDatabaseChanges": false
+}

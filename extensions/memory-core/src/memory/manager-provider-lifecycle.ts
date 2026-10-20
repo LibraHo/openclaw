@@ -483,13 +483,12 @@ export abstract class MemoryProviderLifecycle extends MemoryManagerEmbeddingOps 
   }
 
   protected refreshIndexIdentityDirty(params?: { providerKeyKnown?: boolean }) {
+    // Provider retirement preserves configured identity for both search and status.
     const provider =
       this.settings.provider === "none"
         ? null
-        : this.providerInitialized
+        : this.providerInitialized && this.providerLifecycle.mode !== "degraded"
           ? this.provider
-            ? { id: this.provider.id, model: this.provider.model }
-            : null
           : undefined;
     const state = this.resolveCurrentIndexIdentityState({
       ...(provider !== undefined ? { provider } : {}),
