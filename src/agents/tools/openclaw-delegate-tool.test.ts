@@ -1,7 +1,16 @@
 import { Value } from "typebox/value";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GATEWAY_OWNER_ONLY_CORE_TOOLS } from "../../security/dangerous-tools.js";
+import {
+  getPreparedModelRuntimePluginGeneration,
+  withPreparedModelRuntimePluginGenerationScope,
+} from "../prepared-model-runtime-generation-scope.js";
+import type { PreparedModelRuntimePluginGeneration } from "../prepared-model-runtime.types.js";
 import { compactToolOutputHint } from "../tool-schema-hints.js";
+import {
+  getGatewayToolCallerIdentity,
+  withGatewayToolCallerIdentity,
+} from "./gateway-caller-context.js";
 import { callInProcessGatewayTool } from "./in-process-gateway.js";
 import { createOpenClawDelegateToolsForRun } from "./openclaw-delegate-tool.js";
 
@@ -80,6 +89,30 @@ describe("openclaw delegation tool", () => {
       sessionId: callGateway.mock.calls[1]?.[1].sessionId,
     });
     expect(callGateway.mock.calls[2]?.[1]).toMatchObject({ sessionId: "delegate-user-choice" });
+  });
+
+  it("admits the delegated runtime independently while retaining trusted caller context", async () => {
+    const generation = {} as PreparedModelRuntimePluginGeneration;
+    const identity = { agentId: "main", sessionKey: "agent:main:dm:one" };
+    callGateway.mockImplementation(async () => {
+      expect(getPreparedModelRuntimePluginGeneration()).toBeUndefined();
+      expect(getGatewayToolCallerIdentity()).toMatchObject(identity);
+      await Promise.resolve();
+      expect(getPreparedModelRuntimePluginGeneration()).toBeUndefined();
+      expect(getGatewayToolCallerIdentity()).toMatchObject(identity);
+      return { sessionId: "delegate", reply: "Done." };
+    });
+    const tool = createOpenClawDelegateToolsForRun({
+      sessionAgentId: "main",
+      runSessionKey: identity.sessionKey,
+    })[0];
+    if (!tool) throw new Error("expected delegation tool");
+    await withPreparedModelRuntimePluginGenerationScope(generation, async () => {
+      await withGatewayToolCallerIdentity(identity, () =>
+        tool.execute("scope-call", { message: "Read config." }),
+      );
+      expect(getPreparedModelRuntimePluginGeneration()).toBe(generation);
+    });
   });
 
   it("uses the owner-only core gate", () => {

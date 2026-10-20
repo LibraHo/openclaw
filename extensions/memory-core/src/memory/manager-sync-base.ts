@@ -554,7 +554,7 @@ export abstract class MemoryManagerSyncBase extends MemoryManagerDatabaseContext
     markMemoryVectorRebuildRequired(this.db);
   }
 
-  private hasVectorRebuildMarker(): boolean {
+  protected hasVectorRebuildMarker(): boolean {
     return requiresMemoryVectorRebuild({
       db: this.db,
       vectorTable: VECTOR_TABLE,

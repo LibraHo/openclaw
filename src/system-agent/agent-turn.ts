@@ -9,7 +9,6 @@ import { normalizeCliModel } from "../agents/cli-runner/helpers.js";
 import { SessionManager } from "../agents/sessions/index.js";
 import { resolveStateDir } from "../config/paths.js";
 import type { CliSessionBinding } from "../config/sessions.js";
-import { buildAgentMainSessionKey } from "../routing/session-key.js";
 import { SYSTEM_AGENT_ID } from "./agent-id.js";
 import { SYSTEM_AGENT_SYSTEM_PROMPT } from "./assistant-prompts.js";
 import { SystemAgentInferenceUnavailableError } from "./inference-error.js";
@@ -314,7 +313,7 @@ async function runSystemAgentTurnWithDeps(
   );
   const shared = {
     sessionId: params.session.sessionId,
-    sessionKey: buildAgentMainSessionKey({ agentId: SYSTEM_AGENT_ID }),
+    // In-memory chats own ephemeral harness bindings, never the durable main session.
     agentId: SYSTEM_AGENT_ID,
     trigger: "manual" as const,
     sessionFile: `in-memory:${params.session.sessionId}`,

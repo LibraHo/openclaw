@@ -29,6 +29,38 @@ describe("memory index", () => {
     trackManager,
   } = fixture;
 
+  it("indexes only changed sources during valid search maintenance but preserves explicit rebuild", async () => {
+    const baseCfg = createCfg({});
+    const cfg = {
+      ...baseCfg,
+      memory: {
+        ...baseCfg.memory,
+        search: { ...baseCfg.memory?.search, cache: { enabled: false } },
+      },
+    };
+    const initial = await getFreshManager(cfg, "cli");
+    await initial.sync({ reason: "cli", force: true });
+    await initial.close();
+    providerFixture.embeddedBatchTexts.length = 0;
+    await fs.writeFile(path.join(fixture.paths.memory, "new-source.md"), "Beta changed source.");
+    const manager = await MemoryIndexManager.get({ cfg, agentId: "main", purpose: "maintenance" });
+    if (!manager) throw new Error("expected maintenance manager");
+    trackManager(manager);
+    await manager.sync({ reason: "search", force: true });
+    expect(
+      providerFixture.embeddedBatchTexts.some((text) => text.includes("Beta changed source")),
+    ).toBe(true);
+    expect(
+      providerFixture.embeddedBatchTexts.some((text) => text.includes("Alpha memory line")),
+    ).toBe(false);
+    providerFixture.embeddedBatchTexts.length = 0;
+    await manager.sync({ reason: "cli", force: true });
+    expect(
+      providerFixture.embeddedBatchTexts.some((text) => text.includes("Alpha memory line")),
+    ).toBe(true);
+    expect(manager.status().custom?.indexIdentity).toEqual({ status: "valid" });
+  });
+
   async function expectHybridKeywordSearchFindsMemory(
     cfg: Parameters<typeof getMemorySearchManager>[0]["cfg"],
   ) {

@@ -2,6 +2,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { Type } from "typebox";
 import { SYSTEM_AGENT_ID } from "../../system-agent/agent-id.js";
+import { runOutsidePreparedModelRuntimePluginGenerationScope } from "../prepared-model-runtime-generation-scope.js";
 import { jsonResult, readToolStringParam, type AnyAgentTool } from "./common.js";
 import { callInProcessGatewayTool, type InProcessGatewayCaller } from "./in-process-gateway.js";
 
@@ -62,22 +63,25 @@ function createOpenClawDelegateTool(options?: {
       const message = readToolStringParam(params, "message", { required: true });
       const sessionId = readToolStringParam(params, "sessionId") ?? defaultSessionId;
       const callGateway = options?.callGateway ?? callInProcessGatewayTool;
-      const result = await callGateway<OpenClawDelegateResult>("openclaw.chat", {
-        sessionId,
-        message,
-        delegation: {
-          ...(options?.requesterAgentId ? { agentId: options.requesterAgentId } : {}),
-          ...(options?.agentSessionKey ? { sessionKey: options.agentSessionKey } : {}),
-          ...(options?.turnSourceChannel ? { turnSourceChannel: options.turnSourceChannel } : {}),
-          ...(options?.turnSourceTo ? { turnSourceTo: options.turnSourceTo } : {}),
-          ...(options?.turnSourceAccountId
-            ? { turnSourceAccountId: options.turnSourceAccountId }
-            : {}),
-          ...(options?.turnSourceThreadId !== undefined
-            ? { turnSourceThreadId: options.turnSourceThreadId }
-            : {}),
-        },
-      });
+      // The system expert admits its own runtime; the caller scope still owns permissions.
+      const result = await runOutsidePreparedModelRuntimePluginGenerationScope(() =>
+        callGateway<OpenClawDelegateResult>("openclaw.chat", {
+          sessionId,
+          message,
+          delegation: {
+            ...(options?.requesterAgentId ? { agentId: options.requesterAgentId } : {}),
+            ...(options?.agentSessionKey ? { sessionKey: options.agentSessionKey } : {}),
+            ...(options?.turnSourceChannel ? { turnSourceChannel: options.turnSourceChannel } : {}),
+            ...(options?.turnSourceTo ? { turnSourceTo: options.turnSourceTo } : {}),
+            ...(options?.turnSourceAccountId
+              ? { turnSourceAccountId: options.turnSourceAccountId }
+              : {}),
+            ...(options?.turnSourceThreadId !== undefined
+              ? { turnSourceThreadId: options.turnSourceThreadId }
+              : {}),
+          },
+        }),
+      );
       return jsonResult({
         reply: result.reply,
         ...(result.action && result.action !== "none" ? { action: result.action } : {}),

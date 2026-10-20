@@ -265,6 +265,8 @@ describe("runSystemAgentTurn", () => {
     expect(firstPath).toBe(`in-memory:${first.sessionId}`);
     expect(secondPath).toBe(`in-memory:${second.sessionId}`);
     expect(firstPath).not.toBe(secondPath);
+    expect(mocks.runEmbeddedAgent.mock.calls[0]?.[0]?.sessionKey).toBeUndefined();
+    expect(mocks.runEmbeddedAgent.mock.calls[1]?.[0]?.sessionKey).toBeUndefined();
     expect(first.sessionManager).not.toBe(second.sessionManager);
     await cleanupSystemAgentSession(first);
     expect(first.sessionManager).toBeUndefined();
@@ -321,13 +323,13 @@ describe("runSystemAgentTurn", () => {
       agentDir,
       authProfileId: "claude-cli:ops",
       agentId: "openclaw",
-      sessionKey: "agent:openclaw:main",
       sessionId: session.sessionId,
       workspaceDir: path.join(stateDir, "openclaw", "workspace"),
       sessionFile: `in-memory:${session.sessionId}`,
       messageChannel: "openclaw",
       messageProvider: "openclaw",
     });
+    expect(call.sessionKey).toBeUndefined();
     expect(call.disableCliLiveSession).toBe(true);
     expect(call.cleanupCliLiveSessionOnRunEnd).toBe(true);
     expect(call.cliToolAvailability).toEqual({
@@ -812,7 +814,6 @@ describe("runSystemAgentTurn", () => {
       authProfileIdSource: "user",
       agentHarnessRuntimeOverride: "codex",
       agentId: "openclaw",
-      sessionKey: "agent:openclaw:main",
       sessionId: session.sessionId,
       workspaceDir: path.join(stateDir, "openclaw", "workspace"),
       sessionFile: `in-memory:${session.sessionId}`,

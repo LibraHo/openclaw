@@ -383,7 +383,23 @@ export class MemoryIndexManager extends MemorySearchOrchestration implements Mem
       const runGeneration = async (keywordOnly: boolean) => {
         this.beginSyncProviderGeneration({ forceFtsOnly: keywordOnly });
         try {
-          await this.runSync(params);
+          // Detached search maintenance scans changed sources in a valid index.
+          // Repair, bootstrap fallback, and explicit CLI rebuilds keep full-sync authority.
+          const incrementalSearchMaintenance =
+            this.purpose === "maintenance" &&
+            params?.reason === "search" &&
+            params.force === true &&
+            this.providerInitialized &&
+            this.provider !== null &&
+            !keywordOnly &&
+            !this.memoryFullRetryDirty &&
+            !this.sessionsFullRetryDirty &&
+            !this.hasVectorRebuildMarker() &&
+            this.resolveCurrentIndexIdentityState({
+              meta: this.readMeta(),
+              providerKeyKnown: true,
+            }).status === "valid";
+          await this.runSync(incrementalSearchMaintenance ? { ...params, force: false } : params);
         } finally {
           this.endSyncProviderGeneration();
         }

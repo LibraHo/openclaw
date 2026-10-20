@@ -67,6 +67,19 @@ RUN mkdir -p /out/packages "/out/${OPENCLAW_BUNDLED_PLUGIN_DIR}" && \
 FROM ${OPENCLAW_NODE_BOOKWORM_IMAGE} AS dependency-inputs
 ARG OPENCLAW_BUNDLED_PLUGIN_DIR
 
+# The operator's existing build argument must reach Corepack and pnpm/npm.
+ARG COREPACK_NPM_REGISTRY=https://registry.npmjs.org
+ENV COREPACK_NPM_REGISTRY=${COREPACK_NPM_REGISTRY} \
+    NPM_CONFIG_REGISTRY=${COREPACK_NPM_REGISTRY}
+
+# Preserve the NAS custom image's Debian mirror for build/runtime installs.
+RUN find /etc/apt -type f \( -name '*.list' -o -name '*.sources' \) -exec sed -i \
+  -e 's|http://deb.debian.org/debian|https://mirrors.tuna.tsinghua.edu.cn/debian|g' \
+  -e 's|http://security.debian.org/debian-security|https://mirrors.tuna.tsinghua.edu.cn/debian-security|g' \
+  -e 's|http://deb.debian.org/debian-security|https://mirrors.tuna.tsinghua.edu.cn/debian-security|g' \
+  -e 's|http://security.debian.org/debian-security|https://mirrors.tuna.tsinghua.edu.cn/debian-security|g' \
+  {} +
+
 RUN corepack enable
 
 WORKDIR /app
@@ -219,6 +232,9 @@ LABEL org.opencontainers.image.base.name="docker.io/library/node:24-bookworm-sli
 FROM base-runtime
 ARG OPENCLAW_BUNDLED_PLUGIN_DIR
 
+# The slim base lacks CA roots; HTTPS apt must work before installing certificates.
+COPY --from=dependency-inputs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+
 # OCI base-image metadata for downstream image consumers.
 # If you change these annotations, also update:
 # - docs/install/docker.md ("Base image metadata" section)
@@ -231,6 +247,19 @@ LABEL org.opencontainers.image.source="https://github.com/openclaw/openclaw" \
   org.opencontainers.image.description="OpenClaw gateway and CLI runtime container image"
 
 WORKDIR /app
+
+# The operator's existing build argument must reach Corepack and pnpm/npm.
+ARG COREPACK_NPM_REGISTRY=https://registry.npmjs.org
+ENV COREPACK_NPM_REGISTRY=${COREPACK_NPM_REGISTRY} \
+    NPM_CONFIG_REGISTRY=${COREPACK_NPM_REGISTRY}
+
+# Preserve the NAS custom image's Debian mirror for build/runtime installs.
+RUN find /etc/apt -type f \( -name '*.list' -o -name '*.sources' \) -exec sed -i \
+  -e 's|http://deb.debian.org/debian|https://mirrors.tuna.tsinghua.edu.cn/debian|g' \
+  -e 's|http://security.debian.org/debian-security|https://mirrors.tuna.tsinghua.edu.cn/debian-security|g' \
+  -e 's|http://deb.debian.org/debian-security|https://mirrors.tuna.tsinghua.edu.cn/debian-security|g' \
+  -e 's|http://security.debian.org/debian-security|https://mirrors.tuna.tsinghua.edu.cn/debian-security|g' \
+  {} +
 
 # Install missing runtime utilities and the OpenMP library required by llama-server.
 # `ca-certificates` ships in `bookworm` (full) but not in `bookworm-slim`,
@@ -405,6 +434,10 @@ RUN install -d -m 0755 -o node -g node /home/node/.config && \
     stat -c '%U:%G %a' /home/node/.config | grep -qx 'node:node 755' && \
     stat -c '%U:%G %a' /home/node/.config/openclaw | grep -qx 'node:node 700'
 
+# Preserve the NAS startup setup for its persistent memory dependency.
+COPY docker-entrypoint-custom.sh /usr/local/bin/docker-entrypoint-custom.sh
+RUN chmod 755 /usr/local/bin/docker-entrypoint-custom.sh
+
 ENV NODE_ENV=production
 
 # Security hardening: Run as non-root user
@@ -431,4 +464,4 @@ RUN COREPACK_ENABLE_NETWORK=0 PNPM_CONFIG_OFFLINE=true pnpm --version
 HEALTHCHECK --interval=3m --timeout=10s --start-period=15s --retries=3 \
   CMD ["node", "dist/docker-healthcheck.js"]
 ENTRYPOINT ["tini", "-s", "--"]
-CMD ["node", "openclaw.mjs", "gateway"]
+CMD ["/usr/local/bin/docker-entrypoint-custom.sh"]

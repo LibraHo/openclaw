@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { SILENT_REPLY_TOKEN } from "../../../auto-reply/tokens.js";
 import {
   buildEmbeddedRunnerAssistant,
   makeEmbeddedRunnerAttempt,
@@ -134,6 +135,120 @@ describe("incomplete-turn recovery policy", () => {
       }),
     ).toBe(REASONING_ONLY_RETRY_INSTRUCTION);
   });
+
+  const silentPostToolCases: Array<{
+    name: string;
+    attemptOverrides?: Partial<ReturnType<typeof makeEmbeddedRunnerAttempt>>;
+    params?: Partial<Omit<Parameters<typeof shouldTreatEmptyAssistantReplyAsSilent>[0], "attempt">>;
+    required?: boolean;
+    optional?: boolean;
+  }> = [
+    { name: "successful explicit NO_REPLY", required: true, optional: true },
+    {
+      name: "explicit-only silence",
+      params: { onlyExplicitSilentReply: true },
+      required: true,
+      optional: true,
+    },
+    { name: "silence disabled", params: { allowEmptyAssistantReplyAsSilent: false } },
+    { name: "visible payload", params: { payloadCount: 1 } },
+    { name: "visible final answer", attemptOverrides: { assistantTexts: ["Check completed."] } },
+    {
+      name: "mixed visible and silent text",
+      attemptOverrides: { assistantTexts: [SILENT_REPLY_TOKEN, "Check completed."] },
+    },
+    {
+      name: "genuine missing final answer",
+      attemptOverrides: { assistantTexts: [] },
+      optional: true,
+    },
+    {
+      name: "explicit-only missing final answer",
+      attemptOverrides: { assistantTexts: [] },
+      params: { onlyExplicitSilentReply: true },
+    },
+    {
+      name: "tool error",
+      attemptOverrides: { lastToolError: { toolName: "exec", error: "command failed" } },
+    },
+    {
+      name: "assistant error",
+      attemptOverrides: { currentAttemptAssistant: emptyAssistant({ stopReason: "error" }) },
+    },
+    {
+      name: "failed attempt",
+      attemptOverrides: {
+        terminal: { kind: "failed", source: "prompt", error: new Error("provider failed") },
+      },
+    },
+    { name: "caller abort", params: { aborted: true } },
+    { name: "timeout", params: { timedOut: true } },
+    {
+      name: "committed text delivery",
+      attemptOverrides: { messagingToolSentTexts: ["Already sent."] },
+    },
+    {
+      name: "committed media delivery",
+      attemptOverrides: { messagingToolSentMediaUrls: ["https://example.com/test.png"] },
+    },
+    {
+      name: "committed target delivery",
+      attemptOverrides: {
+        messagingToolSentTargets: [{ tool: "message", provider: "test", to: "test-target" }],
+      },
+    },
+    {
+      name: "accepted child spawn",
+      attemptOverrides: {
+        acceptedSessionSpawns: [{ runId: "child-run", childSessionKey: "agent:test:child" }],
+      },
+    },
+    {
+      name: "pending client tools",
+      attemptOverrides: { clientToolCalls: [{ name: "client-tool", params: {} }] },
+    },
+    { name: "yielded turn", attemptOverrides: { yieldDetected: true } },
+    {
+      name: "approval already requested",
+      attemptOverrides: { didSendDeterministicApprovalPrompt: true },
+    },
+  ];
+
+  it.each(silentPostToolCases)(
+    "classifies $name without weakening required or optional post-tool guards",
+    ({ attemptOverrides, params, required = false, optional = false }) => {
+      const assistantTexts = attemptOverrides?.assistantTexts ?? [SILENT_REPLY_TOKEN];
+      const assistant = emptyAssistant({
+        content: [{ type: "text", text: assistantTexts.join("\n") }],
+      });
+      const attempt = makeEmbeddedRunnerAttempt({
+        assistantTexts,
+        lastAssistant: assistant,
+        currentAttemptAssistant: assistant,
+        toolMetas: [{ toolName: "exec", toolCallId: "tool-1", replaySafe: false }],
+        itemLifecycle: { startedCount: 1, completedCount: 1, activeCount: 0 },
+        replayMetadata: { hadPotentialSideEffects: true, replaySafe: false },
+        currentAttemptReplayMetadata: { hadPotentialSideEffects: true, replaySafe: false },
+        ...attemptOverrides,
+      });
+      for (const [terminalReplyExpectation, expected] of [
+        ["required", required],
+        ["optional", optional],
+      ] as const) {
+        expect(
+          shouldTreatEmptyAssistantReplyAsSilent({
+            allowEmptyAssistantReplyAsSilent: true,
+            payloadCount: 0,
+            aborted: false,
+            timedOut: false,
+            ...params,
+            terminalReplyExpectation,
+            attempt,
+          }),
+        ).toBe(expected);
+      }
+    },
+  );
 
   it("treats reply-optional post-tool empty stops as silent after side effects", () => {
     const assistant = emptyAssistant();
