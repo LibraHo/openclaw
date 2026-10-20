@@ -527,7 +527,7 @@ export class CodexAppServerEventProjector {
     if (!this.asyncDeliveryProjection.allows(item, true)) {
       return;
     }
-    const asyncMessage = this.assistantProjection.recordItemCompleted(
+    const asyncMessage = await this.assistantProjection.recordItemCompleted(
       item,
       itemId,
       this.activeItemIds,

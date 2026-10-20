@@ -398,10 +398,37 @@ function resolveIncrementalStreamingReplyText(params: {
     params.evtType === "text_end" ||
     !params.parsedStreamDirectives ||
     params.parsedStreamDirectives.isSilent ||
-    hasReplyDirectiveMetadata(params.parsedStreamDirectives) ||
     containsCompleteMediaDirectiveLine(params.visibleDelta) ||
     params.parsedStreamDirectives.text !== params.visibleDelta
   ) {
+    return undefined;
+  }
+
+  const previousText = params.previousRawText.trim();
+  if (
+    params.previousCleaned &&
+    previousText.length > params.previousCleaned.length &&
+    params.next.startsWith(previousText)
+  ) {
+    const marker = previousText.lastIndexOf("[[");
+    const tailStart = previousText.indexOf("]]", marker + 2) + 2;
+    const tail = previousText.slice(tailStart);
+    // A consumed directive before any code opener stays settled on append.
+    // New markers, references and media retain the complete-context parser.
+    if (
+      marker >= 0 &&
+      tailStart > marker + 2 &&
+      tail.trim() &&
+      params.previousCleaned.endsWith(tail.trimStart()) &&
+      !/[`~\t]| {4}/u.test(previousText.slice(0, marker)) &&
+      !params.next.includes("[[", previousText.length - 1) &&
+      !params.next.includes("]:")
+    ) {
+      return params.previousCleaned + params.next.slice(previousText.length);
+    }
+  }
+
+  if (hasReplyDirectiveMetadata(params.parsedStreamDirectives)) {
     return undefined;
   }
 

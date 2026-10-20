@@ -1,4 +1,5 @@
 // Memory Core plugin module serializes full memory reindex builds across processes.
+import { resolveUserPath } from "openclaw/plugin-sdk/memory-core-host-engine-foundation";
 import {
   tryAcquireMemorySqliteLease,
   type MemorySqliteLeaseHandle,
@@ -27,7 +28,7 @@ function createMemoryReindexBusyError(lockPath: string): Error & { code: string 
 }
 
 /** Try to acquire the build lock without locking readers of the live agent database. */
-export function tryAcquireMemoryReindexLock(dbPath: string): MemoryReindexLockHandle | undefined {
+function tryAcquireMemoryReindexLock(dbPath: string): MemoryReindexLockHandle | undefined {
   return tryAcquireMemorySqliteLease(resolveMemoryReindexLockPath(dbPath), "exclusive");
 }
 
@@ -48,4 +49,14 @@ export async function waitForMemoryReindexLock(dbPath: string): Promise<MemoryRe
     return finalLock;
   }
   throw createMemoryReindexBusyError(lockPath);
+}
+
+/** Hold the maintenance lease until the complete asynchronous generation settles. */
+export async function withMemoryReindexLock<T>(dbPath: string, run: () => Promise<T>): Promise<T> {
+  const lock = await waitForMemoryReindexLock(resolveUserPath(dbPath));
+  try {
+    return await run();
+  } finally {
+    lock.release();
+  }
 }

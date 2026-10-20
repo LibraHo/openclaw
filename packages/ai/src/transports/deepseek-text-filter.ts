@@ -1,15 +1,14 @@
-import { DEEPSEEK_DSML_MARKERS } from "./deepseek-dsml-grammar.js";
+import { DEEPSEEK_DSML_MARKERS, DEEPSEEK_DSML_TOOL_OPEN_TOKENS } from "./deepseek-dsml-grammar.js";
 
 /**
  * DeepSeek DSML streaming text filter.
  * Removes provider-emitted DSML tool markup while buffering split tag prefixes
  * across streamed chunks.
  */
-const DSML_KINDS = ["tool_use_error", "tool_calls", "tool_call", "function_calls"] as const;
-
-const DSML_OPEN_TOKENS = DEEPSEEK_DSML_MARKERS.flatMap((marker) =>
-  DSML_KINDS.map((kind) => `<${marker}${kind}>`),
-);
+const DSML_OPEN_TOKENS = [
+  ...DEEPSEEK_DSML_TOOL_OPEN_TOKENS,
+  ...DEEPSEEK_DSML_MARKERS.map((marker) => `<${marker}tool_use_error>`),
+];
 const MAX_OPEN_TOKEN_LEN = Math.max(...DSML_OPEN_TOKENS.map((token) => token.length));
 
 interface DeepSeekTextFilter {

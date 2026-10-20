@@ -1,16 +1,26 @@
 {
-  "customRelease": "2026.8.35-B",
+  "customRelease": "2026.8.35-C",
   "upstreamVersion": "2026.8.35",
   "upstreamCommit": "713ba5785d72d6ed1cec971e21307f16cc4234a6",
-  "previousRelease": "2026.8.35-A",
-  "previousSourceCommit": "280a57beb9848093bb635222265107c39ab917cb",
-  "previousImage": "sha256:94321427acef36f32b272ec819900c4927840858434703085cd64c3d727a5560",
+  "previousRelease": "2026.8.35-B",
+  "previousSourceCommit": "63e0adeabec1a8f3264b4852c46d9282187a6623",
+  "deployment": "candidate only; production remains 2026.8.35-A",
   "addedOfficialPRs": [
+    168400,
+    169728,
+    166782,
+    135653
+  ],
+  "officialSourceCommits": {
+    "168400": "4fcac11846800494f7b25f795d039be1ed505a62",
+    "169728": "910a2c1b30857b3b96a456da86a1e72d69d3ebba",
+    "166782": "3a2160c77f400843c312edd6b7d993057a3cf3c8",
+    "135653": "9e45fd9db7192ba82186f8115feeeacb0603eb24"
+  },
+  "preservedOfficialPRs": [
     165072,
     164649,
-    152210
-  ],
-  "preservedOfficialPRs": [
+    152210,
     135919,
     134219,
     135863,
@@ -22,5 +32,7 @@
     135849
   ],
   "interfaceBase": "unchanged 2026.8.35",
-  "dependencyAndDatabaseChanges": false
+  "dependencyChanges": false,
+  "databaseSchemaVersionChanges": false,
+  "memoryReset": "Explicit operator command clears derived indexes only; not run during build or deployment"
 }

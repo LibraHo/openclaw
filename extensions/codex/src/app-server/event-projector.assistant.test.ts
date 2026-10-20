@@ -804,6 +804,56 @@ describe("CodexAppServerEventProjector assistant projection", () => {
     ]);
   });
 
+  it.each([
+    { streamed: "reply prefix", completed: "reply prefix tail", deltas: ["reply prefix", " tail"] },
+    { streamed: "reply prefix", completed: "reply prefix", deltas: ["reply prefix"] },
+    { streamed: "reply prefix", completed: "different final", deltas: ["reply prefix"] },
+    { streamed: "", completed: "snapshot only", deltas: [] },
+  ])(
+    "reconciles completed text without replaying or replacing streamed bytes: $completed",
+    async ({ streamed, completed, deltas }) => {
+      const onAgentEvent = vi.fn();
+      const onPartialReply = vi.fn();
+      const projector = await createProjector({
+        ...(await createParams()),
+        onAgentEvent,
+        onPartialReply,
+      });
+      const item = {
+        type: "agentMessage",
+        id: "tail-final",
+        phase: "final_answer",
+        text: completed,
+      };
+      await projector.handleNotification(
+        forCurrentTurn("item/started", { item: { ...item, text: "" } }),
+      );
+      if (streamed) {
+        await projector.handleNotification(agentMessageDelta(streamed, item.id));
+      }
+      await projector.handleNotification(forCurrentTurn("item/completed", { item }));
+      // Repeated completion and the terminal snapshot must not replay a recovered tail.
+      await projector.handleNotification(forCurrentTurn("item/completed", { item }));
+      await projector.handleNotification(turnCompleted([item]));
+
+      const assistantEvents = onAgentEvent.mock.calls
+        .map((call) => call[0])
+        .filter((event) => event.stream === "assistant");
+      expect(assistantEvents.map((event) => event.data.delta)).toEqual(deltas);
+      expect(onPartialReply.mock.calls.map((call) => call[0].delta)).toEqual(deltas);
+      if (deltas.length > 1) {
+        expect(assistantEvents.at(-1)?.data.text).toBe(completed);
+        expect(onPartialReply).toHaveBeenLastCalledWith({ text: completed, delta: " tail" });
+      }
+      const result = projector.buildResult(buildEmptyToolTelemetry());
+      expect(result.assistantTexts).toEqual([completed]);
+      expect(result.currentAttemptAssistant?.content).toEqual([{ type: "text", text: completed }]);
+      expect(
+        result.messagesSnapshot.filter((message) => message.role === "assistant"),
+      ).toHaveLength(1);
+    },
+  );
+
   it("streams assistant deltas when the app-server omits the item phase", async () => {
     // Codex can stream agentMessage deltas without a final-answer phase. Route
     // them through replaceable events, not append-oriented partial callbacks.

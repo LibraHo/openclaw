@@ -43,6 +43,7 @@ import {
   resolveMemoryIndexManagerCacheKey,
   type MemoryIndexManagerPurpose,
 } from "./manager-registry.js";
+import { withMemoryReindexLock } from "./manager-reindex-lock.js";
 import type { MemoryIndexIdentityState } from "./manager-reindex-state.js";
 import { runMemorySearchMaintenance } from "./manager-search-maintenance.js";
 import { MemorySearchOrchestration } from "./manager-search-orchestration.js";
@@ -352,9 +353,7 @@ export class MemoryIndexManager extends MemorySearchOrchestration implements Mem
     }
     const run = async () => {
       const hadBootstrapFailure = this.embeddingBootstrapFailure !== undefined;
-      let forceFtsOnly =
-        this.embeddingBootstrapFailure !== undefined &&
-        this.getCachedEmbeddingAvailability()?.ok === false;
+      let forceFtsOnly = hadBootstrapFailure && this.getCachedEmbeddingAvailability()?.ok === false;
       if (!forceFtsOnly) {
         try {
           await this.ensureProviderInitialized();
@@ -380,30 +379,33 @@ export class MemoryIndexManager extends MemorySearchOrchestration implements Mem
         }
       }
 
-      const runGeneration = async (keywordOnly: boolean) => {
-        this.beginSyncProviderGeneration({ forceFtsOnly: keywordOnly });
-        try {
-          // Detached search maintenance scans changed sources in a valid index.
-          // Repair, bootstrap fallback, and explicit CLI rebuilds keep full-sync authority.
-          const incrementalSearchMaintenance =
-            this.purpose === "maintenance" &&
-            params?.reason === "search" &&
-            params.force === true &&
-            this.providerInitialized &&
-            this.provider !== null &&
-            !keywordOnly &&
-            !this.memoryFullRetryDirty &&
-            !this.sessionsFullRetryDirty &&
-            !this.hasVectorRebuildMarker() &&
-            this.resolveCurrentIndexIdentityState({
-              meta: this.readMeta(),
-              providerKeyKnown: true,
-            }).status === "valid";
-          await this.runSync(incrementalSearchMaintenance ? { ...params, force: false } : params);
-        } finally {
-          this.endSyncProviderGeneration();
-        }
-      };
+      // Reset must not overtake embeddings awaiting their final incremental writes.
+      // All sync generations own the existing maintenance lease through cleanup.
+      const runGeneration = (keywordOnly: boolean) =>
+        withMemoryReindexLock(this.settings.store.databasePath, async () => {
+          this.beginSyncProviderGeneration({ forceFtsOnly: keywordOnly });
+          try {
+            // Detached search maintenance scans changed sources in a valid index.
+            // Repair, bootstrap fallback, and explicit CLI rebuilds keep full-sync authority.
+            const incrementalSearchMaintenance =
+              this.purpose === "maintenance" &&
+              params?.reason === "search" &&
+              params.force === true &&
+              this.providerInitialized &&
+              this.provider !== null &&
+              !keywordOnly &&
+              !this.memoryFullRetryDirty &&
+              !this.sessionsFullRetryDirty &&
+              !this.hasVectorRebuildMarker() &&
+              this.resolveCurrentIndexIdentityState({
+                meta: this.readMeta(),
+                providerKeyKnown: true,
+              }).status === "valid";
+            await this.runSync(incrementalSearchMaintenance ? { ...params, force: false } : params);
+          } finally {
+            this.endSyncProviderGeneration();
+          }
+        });
       try {
         await runGeneration(forceFtsOnly);
       } catch (err) {

@@ -183,6 +183,30 @@ reranking stage. Its MMR pass is deterministic and local.
 Consider [Honcho](/concepts/memory-honcho) if you want cross-session memory
 with automatic user modeling.
 
+## Safe index recovery
+
+<Warning>
+The index shares `openclaw-agent.sqlite` with canonical sessions, transcripts,
+and other durable agent state. Never delete that database or its `-wal`, `-shm`,
+or `-journal` sidecars to reset memory. Memory indexing cannot reconstruct
+conversation history lost this way.
+</Warning>
+
+To discard the derived index and embedding cache before rebuilding, use
+[`memory reset`](/cli/memory#memory-reset):
+
+```bash
+openclaw memory reset --agent <agent-id>
+openclaw memory index --agent <agent-id>
+```
+
+Reset asks for confirmation; add `--yes` for non-interactive use. It clears only
+memory-owned derived tables, preserving non-memory database tables, including
+sessions and transcripts, and memory source files. It coordinates with
+existing memory maintenance without restarting the Gateway, which can reindex
+retained sources afterward. If indexing is busy, let it finish and retry reset.
+Reset does not shrink the database file or recover already deleted data.
+
 ## Troubleshooting
 
 **Memory search disabled?** Check `openclaw memory status`. If no provider is

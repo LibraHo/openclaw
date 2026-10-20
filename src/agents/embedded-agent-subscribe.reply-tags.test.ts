@@ -158,4 +158,70 @@ describe("subscribeEmbeddedAgentSession reply tags", () => {
     expect(payload.replyToTag).toBeFalsy();
     expect(payload.text).not.toContain("[[reply_to");
   });
+
+  it.each([
+    { suffix: " More [[reply_to_current]] text.", expected: "Intro. More text." },
+    {
+      suffix: "\n\n[label]: https://example.com",
+      expected: "Intro.\n\n[label]: https://example.com",
+    },
+    { suffix: "\nMEDIA:/tmp/example.png\n", expected: "Intro." },
+    {
+      suffix: "\n\n```text\n[[reply_to_current]] literal\n```",
+      expected: "Intro.\n\n```text\n[[reply_to_current]] literal\n```",
+    },
+  ])("keeps canonical reply parsing after a settled tag: $suffix", ({ suffix, expected }) => {
+    const { session, emit } = createStubSessionHarness();
+    const onPartialReply = vi.fn();
+    const subscription = subscribeEmbeddedAgentSession({
+      session,
+      runId: "tagged-stream-context",
+      onPartialReply,
+    });
+    try {
+      emit({ type: "message_start", message: { role: "assistant" } });
+      emitAssistantTextDelta({ emit, delta: "[[reply_to_current]] Intro." });
+      for (let start = 0; start < suffix.length; start += 4) {
+        emitAssistantTextDelta({ emit, delta: suffix.slice(start, start + 4) });
+      }
+      emitAssistantTextEnd({ emit });
+      expect(lastReplyPayload(onPartialReply).text).toBe(expected);
+    } finally {
+      subscription.unsubscribe();
+    }
+  });
+
+  it("streams a long reply-tagged answer without blocking delivery", () => {
+    const body = `${"Paragraph with `code` and **bold** text.\n\n- item `one`\n- item two\n\n".repeat(100)}\`\`\`ts\nconst x = 1;\n\`\`\`\n\nDone.`;
+    const text = `[[reply_to_current]] Intro.\n\n${body}`;
+    const { session, emit } = createStubSessionHarness();
+    let lastText = "";
+    const subscription = subscribeEmbeddedAgentSession({
+      session,
+      runId: "tagged-stream-performance",
+      onPartialReply: (payload) => {
+        lastText = payload.text ?? "";
+      },
+    });
+    try {
+      emit({ type: "message_start", message: { role: "assistant" } });
+      const started = performance.now();
+      for (let start = 0; start < text.length; start += 40) {
+        emitAssistantTextDelta({ emit, delta: text.slice(start, start + 40) });
+      }
+      const elapsed = performance.now() - started;
+      console.log(
+        JSON.stringify({
+          benchmark: "reply-tagged-stream",
+          chars: text.length,
+          elapsedMs: elapsed,
+          rssBytes: process.memoryUsage().rss,
+        }),
+      );
+      expect(lastText).toBe(`Intro.\n\n${body}`);
+      expect(elapsed).toBeLessThan(1_000);
+    } finally {
+      subscription.unsubscribe();
+    }
+  });
 });

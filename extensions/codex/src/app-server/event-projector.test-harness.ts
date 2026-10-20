@@ -21,6 +21,7 @@ import {
   resetGlobalHookRunner,
 } from "openclaw/plugin-sdk/hook-runtime";
 import { createMockPluginRegistry } from "openclaw/plugin-sdk/plugin-test-runtime";
+import { closeOpenClawAgentDatabasesForTest } from "openclaw/plugin-sdk/sqlite-runtime-testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CodexAppServerEventProjector } from "./event-projector.js";
 import { createCodexTestHostCapabilities } from "./host-capability.test-support.js";
@@ -142,6 +143,8 @@ export function registerCodexEventProjectorTestLifecycle(): void {
     resetGlobalHookRunner();
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
+    // Async transcript delivery opens cached agent handles; Windows cannot remove them while open.
+    closeOpenClawAgentDatabasesForTest();
     for (const tempDir of tempDirs) {
       await fs.rm(tempDir, { recursive: true, force: true });
     }

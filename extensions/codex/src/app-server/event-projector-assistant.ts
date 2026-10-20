@@ -203,16 +203,23 @@ export class CodexAssistantProjection {
     }
   }
 
-  recordItemCompleted(
+  async recordItemCompleted(
     item: CodexThreadItem | undefined,
     itemId: string | undefined,
     activeItemIds: ReadonlySet<string>,
-  ): { itemId: string; message: AssistantMessage; text: string } | undefined {
+  ): Promise<{ itemId: string; message: AssistantMessage; text: string } | undefined> {
+    this.rememberAssistantPhase(item);
+    const streamed =
+      item?.type === "agentMessage" ? this.assistantTextByItem.get(item.id) : undefined;
+    // Completed text is authoritative; lost final deltas must reach stream consumers too.
+    // Only extend a proven prefix: append-only consumers cannot retract divergent bytes.
+    if (streamed && typeof item?.text === "string" && item.text.startsWith(streamed)) {
+      await this.handleAssistantDelta({ itemId: item.id, delta: item.text.slice(streamed.length) });
+    }
     if (itemId && item?.type === "agentMessage") {
       this.completedAssistantItemIds.add(itemId);
     }
     this.noteNativeWorkBarrier(item);
-    this.rememberAssistantPhase(item);
     if (
       item?.type === "agentMessage" &&
       itemId &&

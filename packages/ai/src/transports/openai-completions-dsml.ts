@@ -1,5 +1,9 @@
 import { isRecord } from "@openclaw/normalization-core/record-coerce";
-import { DEEPSEEK_DSML_MARKERS, DEEPSEEK_DSML_MARKER_PATTERN } from "./deepseek-dsml-grammar.js";
+import {
+  DEEPSEEK_DSML_MARKERS,
+  DEEPSEEK_DSML_MARKER_PATTERN,
+  DEEPSEEK_DSML_TOOL_OPEN_TOKENS,
+} from "./deepseek-dsml-grammar.js";
 import { measureUtf8AppendBytes } from "./openai-transport-shared.js";
 
 export type RecoveredDeepSeekDsmlToolCall = {
@@ -11,10 +15,6 @@ export type RecoveredDeepSeekDsmlToolCall = {
 
 type DeepSeekDsmlRecoveredPart = { kind: "text"; text: string } | RecoveredDeepSeekDsmlToolCall;
 
-const DEEPSEEK_DSML_TOOL_KINDS = ["tool_calls", "tool_call", "function_calls"] as const;
-const DEEPSEEK_DSML_TOOL_OPEN_TOKENS = DEEPSEEK_DSML_MARKERS.flatMap((marker) =>
-  DEEPSEEK_DSML_TOOL_KINDS.map((kind) => `<${marker}${kind}>`),
-);
 const DEEPSEEK_DSML_INVOKE_OPEN_PREFIXES = DEEPSEEK_DSML_MARKERS.map(
   (marker) => `<${marker}invoke`,
 );
