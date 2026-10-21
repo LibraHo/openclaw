@@ -1,3 +1,27 @@
+# Custom OpenClaw 2026.8.35-D
+
+Candidate based on custom 8.35-C. Compilation does not switch the running Gateway. UI, package/plugin versions, dependency locks, and database schema versions remain on 2026.8.35. All C/A/B fixes and custom apt/entrypoint settings are retained.
+
+## D backports
+
+| Official PR                                                | Adaptation and boundary                                                                                                                                                                                                                                                                                                                                           |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [140388](https://github.com/openclaw/openclaw/pull/140388) | Retry only proven pre-tunnel proxy failures; an accepted CONNECT followed by connection loss stays ambiguous.                                                                                                                                                                                                                                                     |
+| [156842](https://github.com/openclaw/openclaw/pull/156842) | New Telegram text/rich-text sends use fresh connections; polling, edits, proxy/DNS policy and cleanup retain their owners.                                                                                                                                                                                                                                        |
+| [168738](https://github.com/openclaw/openclaw/pull/168738) | Ordinary inbound final text opts into one saved-text replay after a typed ambiguous transport failure, at most two total sends. No model/tool rerun. Media, controls, untyped errors, accepted partial/identityless results remain excluded. Existing synchronous 8.35 queue owns retry, custody and settlement; no newer worker architecture or schema imported. |
+| [169010](https://github.com/openclaw/openclaw/pull/169010) | Startup/reconnect scans exclude active producers before claiming local recovery ownership.                                                                                                                                                                                                                                                                        |
+| [165444](https://github.com/openclaw/openclaw/pull/165444) | Cron/hooks forward existing catalog-backed model thinking capability; no global/task effort or native Codex upgrade.                                                                                                                                                                                                                                              |
+| [164633](https://github.com/openclaw/openclaw/pull/164633) | Per-agent context limits merge defaults field by field.                                                                                                                                                                                                                                                                                                           |
+| [169029](https://github.com/openclaw/openclaw/pull/169029) | Doctor validates raw UTF-8 before and after archiving duplicate memory files, preserving invalid bytes rather than rewriting replacement characters.                                                                                                                                                                                                              |
+
+## Delivery limits
+
+Saved-final replay accepts the possibility of one duplicate when Telegram accepted a message but its response was lost. This is not delivery reconciliation. Permission is granted only by the ordinary inbound final dispatcher; cron/invest and command-mediated completion coverage is not claimed. Old queue records acquire no replay permission automatically. Existing partial-send protection and exact claim/timestamp fences remain authoritative. Exhausted failures retain the 8.35 dispatcher notice lifecycle.
+
+No production Telegram messages, broker access, investment rule changes, task enabling, or memory resets are part of building this candidate. Loopback HTTP and SQLite checks establish transport/queue behavior, not live Telegram or provider-account availability. Live Telegram Test Server credentials are unavailable for this maintenance checkout; no real-group message is sent as a substitute.
+
+## Previous C release
+
 # Custom OpenClaw 2026.8.35-C
 
 Candidate built from the custom 8.35-B source. This source release does not switch an existing installation to the candidate image.

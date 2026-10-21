@@ -147,6 +147,9 @@ const telegramClientOptionsCache = new Map<string, CachedTelegramClientOptions>(
 const MAX_TELEGRAM_CLIENT_OPTIONS_CACHE_SIZE = 64;
 
 export function resetTelegramClientOptionsCacheForTests(): void {
+  for (const entry of telegramClientOptionsCache.values()) {
+    closeCachedTelegramClientOptions(entry);
+  }
   telegramClientOptionsCache.clear();
 }
 

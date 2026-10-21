@@ -6,6 +6,7 @@ import { getGlobalHookRunner } from "../../plugins/hook-runner-global.js";
 import {
   findPlatformMessageRejectedError,
   isProvenDeliveryNotSentError,
+  isAmbiguousDeliveryTransportError,
 } from "../delivery-recovery.shared.js";
 import { formatErrorMessage } from "../errors.js";
 import type { DeliverOutboundPayloadsParams, PlatformSendRoute } from "./deliver-contracts.js";
@@ -141,12 +142,15 @@ export async function deliverOutboundPayloadsWithQueueCleanup(
   const recordOwnedQueueFailure = (
     record: typeof failDelivery | typeof failDeliveryAfterPlatformSend,
     error: string,
+    ambiguousTransportError?: true,
   ) => {
     throwIfProducerLeaseLost();
     if (!queueOwner) {
       throw new Error("Queued delivery failure requires a queue id");
     }
-    return queueOwner.fail(record, error);
+    return ambiguousTransportError
+      ? queueOwner.fail(record, error, true)
+      : queueOwner.fail(record, error);
   };
   const persistOwnedPostSendState = () => {
     throwIfProducerLeaseLost();
@@ -572,7 +576,13 @@ export async function deliverOutboundPayloadsWithQueueCleanup(
           emitFailedTerminals("queue");
         }
       } else if (!platformResultsReturned) {
+        const ambiguousFinalTransport =
+          params.retryAmbiguousFinalText === true &&
+          platformSendStarted &&
+          deliveredResults.length === 0 &&
+          isAmbiguousDeliveryTransportError(err);
         const sendEvidence =
+          ambiguousFinalTransport ||
           deliveredResults.length > 0 ||
           (!isProvenDeliveryNotSentError(err) &&
             (platformDispatchedPayloads.size > 0 ||
@@ -581,7 +591,11 @@ export async function deliverOutboundPayloadsWithQueueCleanup(
           try {
             queuedPostSendState ??= await persistOwnedPostSendState();
             if (queuedPostSendState === "marked") {
-              await recordOwnedQueueFailure(failDeliveryAfterPlatformSend, formatErrorMessage(err));
+              await recordOwnedQueueFailure(
+                failDeliveryAfterPlatformSend,
+                formatErrorMessage(err),
+                ambiguousFinalTransport ? true : undefined,
+              );
               queuedPostSendState = "failed";
             }
           } catch (persistErr: unknown) {

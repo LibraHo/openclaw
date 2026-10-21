@@ -37,7 +37,7 @@ title: "Retry policy"
 
 ### Telegram
 
-- Retries on transient errors (429, timeout, connect/reset/closed, temporarily unavailable).
+- Retries rate limits and transport failures proven to occur before dispatch, including proxy CONNECT refusal. A timeout, reset, or closed socket after dispatch does not prove that Telegram missed the message.
 - Uses `retry_after` when available, otherwise exponential backoff.
 - HTML/Markdown parse errors are not retried; they fall back to plain text on the first attempt.
 
@@ -58,8 +58,13 @@ before charging an attempt. An expired or replaced claim does not spend the
 remaining budget; recovery can acquire a fresh claim before retrying.
 
 Lease expiry does not erase evidence that a send already started. Those entries
-still require reconciliation before replay, and an unreplaced owner can record a
-late result without authorizing another send.
+require reconciliation before replay unless ordinary inbound final text explicitly
+grants one saved-text retry after a typed ambiguous transport failure. That path
+has at most two total sends and can produce one duplicate if the first response
+was lost. It does not rerun the model or tools, and excludes media, controls, and
+accepted partial or identityless results. Other callers, including cron delivery,
+do not gain this permission automatically. An unreplaced owner can still record
+a late result without authorizing another send.
 
 ## Related
 

@@ -167,6 +167,38 @@ export function isProvenDeliveryNotSentError(err: unknown): boolean {
   return foundNotSentProof;
 }
 
+/** Transport ambiguity is not proof of no send; only opted-in final text may replay. */
+export function isAmbiguousDeliveryTransportError(error: unknown): boolean {
+  const candidates = collectErrorGraphCandidates(error, nestedErrorCandidates);
+  if (
+    isProvenDeliveryNotSentError(error) ||
+    candidates.some(
+      (candidate) =>
+        isRecord(candidate) &&
+        ((Array.isArray(candidate.results) && candidate.results.length > 0) ||
+          (Array.isArray(candidate.payloadOutcomes) &&
+            candidate.payloadOutcomes.some(
+              (outcome) =>
+                isRecord(outcome) &&
+                ((outcome.status === "suppressed" &&
+                  outcome.reason === "adapter_returned_no_identity") ||
+                  (Array.isArray(outcome.results) && outcome.results.length > 0)),
+            )) ||
+          candidate.visibleReplySent === true ||
+          (isRecord(candidate.deliveryResult) &&
+            (candidate.deliveryResult.visibleReplySent === true ||
+              (Array.isArray(candidate.deliveryResult.messageIds) &&
+                candidate.deliveryResult.messageIds.length > 0)))),
+    )
+  ) {
+    return false;
+  }
+  return candidates.some((candidate) => {
+    const code = extractErrorCode(candidate)?.trim().toUpperCase();
+    return code !== undefined && TRANSPORT_ERROR_CODE_RE.test(code);
+  });
+}
+
 /** Finds a provider's permanent pre-dispatch rejection through delivery wrappers. */
 export function findPlatformMessageRejectedError(
   err: unknown,

@@ -373,6 +373,8 @@ export type ChannelMessageDurableFinalAdapter = {
   capabilities?: DurableFinalDeliveryRequirementMap;
   /** Opt into provider reconciliation for ordinary single-payload queued sends. */
   automaticUnknownSendReconciliation?: boolean;
+  /** Recognize inert metadata without admitting controls or effects. */
+  isTextOnlyChannelData?: (channelData: NonNullable<ReplyPayload["channelData"]>) => boolean;
   /**
    * Synchronous provider admission before a durable intent is created or replayed.
    * Providers must not perform I/O from this hook.

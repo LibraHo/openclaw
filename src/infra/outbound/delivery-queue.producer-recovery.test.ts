@@ -294,6 +294,14 @@ describe("exhausted delivery producer recovery", () => {
       const id = "renewed-platform-owner";
       const claimId = await reserveProducer(id);
       await queueStorage.markDeliveryPlatformSendAttemptStarted(id, tmpDir(), undefined, claimId);
+      // Recovery now filters active scan rows before acquiring the local claim.
+      // An expired scan snapshot must still be fenced by the freshly renewed lease.
+      const loadAll = queueStorage.loadUnfinishedDeliveries;
+      vi.spyOn(queueStorage, "loadUnfinishedDeliveries").mockImplementationOnce(async (...args) =>
+        (await loadAll(...args)).map((entry) =>
+          Object.assign({}, entry, { availableAt: startTime - 1 }),
+        ),
+      );
       const load = queueStorage.loadUnfinishedDelivery;
       vi.spyOn(queueStorage, "loadUnfinishedDelivery").mockImplementationOnce(async (...args) => {
         const snapshot = await load(...args);

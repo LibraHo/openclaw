@@ -51,8 +51,15 @@ export function createQueuedDeliveryOwner(params: {
           ? ackDelivery(params.queueId, params.stateDir)
           : ackDelivery(params.queueId);
     },
-    fail(record: QueuedDeliveryFailureRecorder, error: string): Promise<void> {
+    fail(
+      record: QueuedDeliveryFailureRecorder,
+      error: string,
+      ambiguousTransportError?: true,
+    ): Promise<void> {
       const expectedPlatformSendAttemptId = resolveExpectedPlatformSendAttemptId();
+      if (ambiguousTransportError) {
+        return record(params.queueId, error, params.stateDir, expectedPlatformSendAttemptId, true);
+      }
       if (expectedPlatformSendAttemptId !== undefined) {
         return record(params.queueId, error, params.stateDir, expectedPlatformSendAttemptId);
       }

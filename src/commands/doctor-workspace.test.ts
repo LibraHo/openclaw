@@ -70,8 +70,8 @@ describe("root memory repair", () => {
   });
 
   it("merges true split-brain root memory files into MEMORY.md", async () => {
-    await fs.writeFile(path.join(tmpDir, "MEMORY.md"), "# Canonical\n", "utf8");
-    await fs.writeFile(path.join(tmpDir, "memory.md"), "# Legacy\n", "utf8");
+    await fs.writeFile(path.join(tmpDir, "MEMORY.md"), "# Canonical 合法 😀 �\n", "utf8");
+    await fs.writeFile(path.join(tmpDir, "memory.md"), "# Legacy 旧版 �\n", "utf8");
     if (!(await hasDistinctRootMemoryFiles(tmpDir))) {
       return;
     }
@@ -85,14 +85,78 @@ describe("root memory repair", () => {
     expect(migration.mergedLegacy).toBe(true);
 
     const canonical = await fs.readFile(path.join(tmpDir, "MEMORY.md"), "utf8");
-    expect(canonical).toContain("# Canonical");
-    expect(canonical).toContain("# Legacy");
+    expect(canonical).toContain("# Canonical 合法 😀 �");
+    expect(canonical).toContain("# Legacy 旧版 �");
     await expectPathMissing(path.join(tmpDir, "memory.md"));
     if (migration.archivedLegacyPath === undefined) {
       throw new Error("expected archived legacy memory path");
     }
     await expect(fs.access(migration.archivedLegacyPath)).resolves.toBeUndefined();
   });
+
+  it.each([
+    { invalidFile: "MEMORY.md", afterArchive: false },
+    { invalidFile: "memory.md", afterArchive: false },
+    { invalidFile: "MEMORY.md", afterArchive: true },
+    { invalidFile: "memory.md", afterArchive: true },
+  ])(
+    "preserves invalid UTF-8 in $invalidFile (after archive: $afterArchive)",
+    async ({ invalidFile, afterArchive }) => {
+      const canonicalPath = path.join(tmpDir, "MEMORY.md");
+      const legacyPath = path.join(tmpDir, "memory.md");
+      const canonical = Buffer.from("# Canonical\n");
+      const legacy = Buffer.from("# Legacy\n");
+      const invalid = Buffer.from([0x23, 0x20, 0xff, 0x0a]);
+      await fs.writeFile(canonicalPath, canonical);
+      await fs.writeFile(legacyPath, legacy);
+      if (!(await hasDistinctRootMemoryFiles(tmpDir))) {
+        return;
+      }
+      if (afterArchive) {
+        const rename = vi.spyOn(fs, "rename");
+        rename.mockImplementationOnce(async (source, target) => {
+          rename.mockRestore();
+          await fs.rename(source, target);
+          await fs.writeFile(invalidFile === "MEMORY.md" ? canonicalPath : target, invalid);
+        });
+      } else {
+        await fs.writeFile(path.join(tmpDir, invalidFile), invalid);
+      }
+      const cfg = {
+        agents: { defaults: { workspace: tmpDir }, entries: { main: { default: true } } },
+      } as OpenClawConfig;
+      const prompter = {
+        confirmRuntimeRepair: vi.fn(async () => true),
+      } as unknown as DoctorPrompter;
+
+      await maybeRepairWorkspaceMemoryHealth({ cfg, prompter });
+
+      await expect(fs.readFile(canonicalPath)).resolves.toEqual(
+        invalidFile === "MEMORY.md" ? invalid : canonical,
+      );
+      const message = String(note.mock.calls[0]?.[0]);
+      expect(message).toContain("not valid UTF-8");
+      expect(message).toContain(canonicalPath);
+      expect(message).toContain(legacyPath);
+      expect(message).not.toContain("Workspace memory root merged");
+      if (afterArchive) {
+        await expectPathMissing(legacyPath);
+        const repairDir = path.join(tmpDir, ".openclaw-repair", "root-memory");
+        const archives = await fs.readdir(repairDir);
+        expect(archives).toHaveLength(1);
+        const archive = path.join(repairDir, archives[0], "memory.md");
+        await expect(fs.readFile(archive)).resolves.toEqual(
+          invalidFile === "memory.md" ? invalid : legacy,
+        );
+        expect(message).toContain(`- preserved archive: ${archive}`);
+      } else {
+        await expect(fs.readFile(legacyPath)).resolves.toEqual(
+          invalidFile === "memory.md" ? invalid : legacy,
+        );
+        await expectPathMissing(path.join(tmpDir, ".openclaw-repair"));
+      }
+    },
+  );
 
   it("reads legacy content after moving it into the archive", async () => {
     const canonicalPath = path.join(tmpDir, "MEMORY.md");
@@ -137,7 +201,7 @@ describe("root memory repair", () => {
 
     expect(migration.changed).toBe(true);
     expect(migration.removedLegacy).toBe(true);
-    expect(migration.readLimitExceeded).toBe(true);
+    expect(migration.skipReason).toBe("a file exceeded the safe read limit");
     await expectPathMissing(legacyPath);
     if (!migration.archivedLegacyPath) {
       throw new Error("expected preserved archive path");
@@ -166,7 +230,7 @@ describe("root memory repair", () => {
 
     expect(migration.changed).toBe(true);
     expect(migration.removedLegacy).toBe(true);
-    expect(migration.readLimitExceeded).toBe(true);
+    expect(migration.skipReason).toBe("a file exceeded the safe read limit");
     if (!migration.archivedLegacyPath) {
       throw new Error("expected preserved archive path");
     }
@@ -247,7 +311,7 @@ describe("root memory repair", () => {
     expect(migration.changed).toBe(false);
     expect(migration.removedLegacy).toBe(false);
     expect(migration.mergedLegacy).toBe(false);
-    expect(migration.readLimitExceeded).toBe(true);
+    expect(migration.skipReason).toBe("a file exceeded the safe read limit");
     await expect(fs.readFile(path.join(tmpDir, "memory.md"), "utf8")).resolves.toContain(
       "# Legacy",
     );
@@ -264,7 +328,7 @@ describe("root memory repair", () => {
     expect(migration.changed).toBe(false);
     expect(migration.removedLegacy).toBe(false);
     expect(migration.mergedLegacy).toBe(false);
-    expect(migration.readLimitExceeded).toBe(true);
+    expect(migration.skipReason).toBe("a file exceeded the safe read limit");
     await expect(fs.readFile(path.join(tmpDir, "memory.md"), "utf8")).resolves.toContain(
       "# Legacy",
     );
@@ -283,8 +347,7 @@ describe("root memory repair", () => {
     expect(migration.changed).toBe(false);
     expect(migration.removedLegacy).toBe(false);
     expect(migration.mergedLegacy).toBe(false);
-    expect(migration.readError).toBe(true);
-    expect(migration.readLimitExceeded).toBe(false);
+    expect(migration.skipReason).toBe("a file could not be read");
     await expect(fs.readFile(path.join(tmpDir, "memory.md"), "utf8")).resolves.toContain(
       "# Legacy",
     );
@@ -362,7 +425,7 @@ describe("root memory repair", () => {
       expect(migration.changed).toBe(false);
       expect(migration.removedLegacy).toBe(false);
       expect(migration.mergedLegacy).toBe(false);
-      expect(migration.archiveError).toBe(true);
+      expect(migration.skipReason).toBe("legacy memory could not be archived atomically");
       await expect(fs.readFile(canonicalPath, "utf8")).resolves.toBe("# Canonical\n");
       await expect(fs.readFile(legacyPath, "utf8")).resolves.toBe("# Legacy\n");
     } finally {

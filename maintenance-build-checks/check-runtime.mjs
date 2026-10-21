@@ -5,7 +5,7 @@ import { pathToFileURL } from "node:url";
 
 assert.equal(JSON.parse(fs.readFileSync("/app/package.json", "utf8")).version, "2026.8.35");
 const buildInfo = JSON.parse(fs.readFileSync("/app/dist/build-info.json", "utf8"));
-assert.ok(buildInfo.buildId.startsWith("2026.8.35-C-"), "Missing custom C build identity");
+assert.ok(buildInfo.buildId.startsWith("2026.8.35-D-"), "Missing custom D build identity");
 fs.accessSync("/usr/local/bin/docker-entrypoint-custom.sh", fs.constants.X_OK);
 
 const codexRoot = "/app/dist/extensions/codex/";

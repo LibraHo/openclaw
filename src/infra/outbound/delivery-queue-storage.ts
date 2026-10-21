@@ -20,7 +20,6 @@ import {
   terminalizePendingDeliveryQueueEntry,
   updateDeliveryQueueEntry,
   upsertDeliveryQueueEntry,
-  type DeliveryQueueEntryState,
 } from "../delivery-queue-sqlite.js";
 import { generateSecureUuid } from "../secure-random.js";
 import { collectEntrySpoolPaths, releaseSpoolArtifacts } from "./delivery-queue-media-spool.js";
@@ -34,12 +33,14 @@ import {
 } from "./delivery-queue-media-staging.js";
 import {
   claimDeliveryPlatformSendAttempt,
+  hasActiveDeliveryOwner,
   markOwnedDeliveryPlatformSendDispatched,
 } from "./delivery-queue-platform-lease.js";
 import {
   StableDeliveryPreparationLostError,
   type StableDeliveryPreparation,
 } from "./delivery-queue-preparation.js";
+import { FINAL_TEXT_RECOVERY_MAX_ATTEMPTS } from "./delivery-queue-types.js";
 import type {
   LegacyQueuedDelivery,
   LegacyQueuedDeliveryPreparation,
@@ -119,6 +120,7 @@ function createQueuedDelivery(
     accountId: params.accountId,
     queuePolicy: params.queuePolicy,
     requireUnknownSendReconciliation: params.requireUnknownSendReconciliation,
+    retryAmbiguousFinalText: params.retryAmbiguousFinalText,
     ...(params.initialProducerClaim ??
       (params.requiresProducerClaim === true ? { requiresProducerClaim: true } : {})),
     preparedBatch: projectPreparedOutboundBatchForStorage(preparedBatchFromLowLevelInput(params)),
@@ -378,6 +380,7 @@ export async function failDeliveryAfterPlatformSend(
   error: string,
   stateDir?: string,
   expectedPlatformSendAttemptId?: string | null,
+  ambiguousTransportError?: true,
 ): Promise<void> {
   updateQueuedDelivery(
     id,
@@ -387,6 +390,11 @@ export async function failDeliveryAfterPlatformSend(
       retryCount: entry.retryCount + 1,
       lastAttemptAt: Date.now(),
       lastError: error,
+      ambiguousTransportError,
+      maxRetries:
+        entry.retryAmbiguousFinalText === true && ambiguousTransportError === true
+          ? FINAL_TEXT_RECOVERY_MAX_ATTEMPTS
+          : entry.maxRetries,
       availableAt: undefined,
       producerClaimId: undefined,
       platformSendStartedAt: entry.platformSendStartedAt ?? Date.now(),
@@ -396,7 +404,10 @@ export async function failDeliveryAfterPlatformSend(
   );
 }
 
-export { claimDeliveryPlatformSendAttempt } from "./delivery-queue-platform-lease.js";
+export {
+  claimDeliveryPlatformSendAttempt,
+  hasActiveDeliveryOwner,
+} from "./delivery-queue-platform-lease.js";
 
 /** Reserve one durable delivery call before invoking the provider path. */
 export async function reserveDeliveryAttempt(
@@ -583,20 +594,6 @@ export async function loadUnfinishedDelivery(
     stateDir,
     "unfinished",
   ) as QueuedDelivery | null; // SAFETY: Pending and unfinished rows in this namespace retain the prepared payload.
-}
-
-export function hasActiveDeliveryOwner(entry: DeliveryQueueEntryState, now: number): boolean {
-  return (
-    (typeof entry.completionRetention === "object" ||
-      entry.completionRetention === "permanent" ||
-      entry.requiresProducerClaim === true) &&
-    (entry.recoveryState === "producer_claimed" ||
-      ((entry.recoveryState === "send_attempt_started" ||
-        entry.recoveryState === "unknown_after_send") &&
-        entry.requiresProducerClaim === true)) &&
-    typeof entry.availableAt === "number" &&
-    entry.availableAt > now
-  );
 }
 
 /** Close send custody before awaiting an owner projection; retain its restart work. */

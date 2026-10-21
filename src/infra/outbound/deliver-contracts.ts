@@ -218,6 +218,8 @@ export type DeliverOutboundPayloadsCoreParams = {
   requiredUnknownSendReconciliation?: boolean;
   /** @internal Caller preflight explicitly required provider unknown-send reconciliation. */
   requireUnknownSendReconciliation?: boolean;
+  /** @internal Only ordinary inbound finals grant bounded saved-text replay. */
+  retryAmbiguousFinalText?: true;
   /** @internal Revalidate caller authority before direct adapter code can run. */
   onDirectAdapterHandoff?: () => Promise<void>;
   /** @internal Synchronously fence authority at the final adapter invocation. */

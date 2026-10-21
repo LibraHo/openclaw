@@ -1,3 +1,4 @@
+import { resolveRequestUrl } from "openclaw/plugin-sdk/request-url";
 // Telegram plugin module implements api root behavior.
 const DEFAULT_TELEGRAM_API_ROOT = "https://api.telegram.org";
 
@@ -46,5 +47,14 @@ export function hasTelegramBotEndpointApiRoot(apiRoot: unknown): boolean {
     return Boolean(last && isTelegramBotEndpointSegment(last));
   } catch {
     return false;
+  }
+}
+
+export function extractTelegramApiMethod(input: string | URL | { url: string }): string | null {
+  try {
+    const segments = new URL(resolveRequestUrl(input)).pathname.split("/").filter(Boolean);
+    return segments.at(-1)?.toLowerCase() ?? null;
+  } catch {
+    return null;
   }
 }

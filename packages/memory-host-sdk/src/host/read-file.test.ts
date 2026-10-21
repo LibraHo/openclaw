@@ -19,6 +19,37 @@ async function createDirectorySymlink(target: string, linkPath: string): Promise
 }
 
 describe("readMemoryFile", () => {
+  it.each([
+    { limits: {}, expectedLines: 20 },
+    { limits: { postCompactionMaxChars: 500 }, expectedLines: 20 },
+    { limits: { memoryGetMaxChars: 1000 }, expectedLines: 10 },
+  ])("inherits unspecified agent memory limits: $limits", async ({ limits, expectedLines }) => {
+    const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), "memory-context-limits-"));
+    try {
+      const workspaceDir = await fs.realpath(tmpRoot);
+      await fs.writeFile(path.join(workspaceDir, "MEMORY.md"), `${"x".repeat(99)}\n`.repeat(80));
+      const contextLimits: { memoryGetMaxChars?: number; postCompactionMaxChars?: number } = limits;
+      const cfg = {
+        agents: {
+          defaults: { contextLimits: { memoryGetMaxChars: 2000 } },
+          entries: { main: { workspace: workspaceDir, contextLimits } },
+        },
+      };
+
+      const result = await readAgentMemoryFile({ cfg, agentId: "main", relPath: "MEMORY.md" });
+
+      expect(result).toMatchObject({
+        status: "ok",
+        truncated: true,
+        lines: expectedLines,
+        nextFrom: expectedLines + 1,
+      });
+      expect(result.text.split("\n\n")[0]).toHaveLength(expectedLines * 100 - 1);
+    } finally {
+      await fs.rm(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
   it("returns not found for absent extra paths and rejects non-directory parents", async () => {
     const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), "memory-read-file-"));
     try {

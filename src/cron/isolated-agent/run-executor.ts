@@ -19,7 +19,11 @@ import {
 } from "../../agents/harness/context-engine-turn-attempt.js";
 import { AgentHarnessPreflightError } from "../../agents/harness/errors.js";
 import { runAgentHarnessBeforeMessageWriteHook } from "../../agents/harness/hook-helpers.js";
-import { findModelInCatalog, modelSupportsInput } from "../../agents/model-catalog-lookup.js";
+import {
+  findModelInCatalog,
+  modelSupportsInput,
+  prepareModelRunCapabilities,
+} from "../../agents/model-catalog-lookup.js";
 import type { ModelCatalogEntry } from "../../agents/model-catalog.types.js";
 import { resolveCliRuntimeExecutionProvider } from "../../agents/model-runtime-aliases.js";
 import { resolveConfiguredThinkingDefault } from "../../agents/model-thinking-default.js";
@@ -768,6 +772,12 @@ function createCronPromptExecutor(params: {
           provider: providerOverride,
           model: modelOverride,
           agentHarnessRuntimeOverride: sessionRuntimeOverride,
+          // Harness-native effort lists reach the runtime model through this
+          // prepared capability, as they do for ordinary replies and commands.
+          modelThinkingCapability: prepareModelRunCapabilities(
+            [thinkingCatalog, []],
+            [providerOverride, modelOverride, candidateRuntime],
+          ).modelThinkingCapability,
           modelFallbacksOverride: cronFallbacksOverride,
           authProfileId: params.liveSelection.authProfileId,
           authProfileIdSource: params.liveSelection.authProfileId

@@ -17,6 +17,8 @@ import type { IndexedOutboundAuditTerminal } from "./outbound-audit.js";
 import type { PreparedOutboundBatch } from "./prepared-batch.js";
 import type { OutboundSessionContext } from "./session-context.js";
 
+export const FINAL_TEXT_RECOVERY_MAX_ATTEMPTS = 2;
+
 export type QueuedRenderedMessageBatchPlan = {
   payloadCount: number;
   textCount: number;
@@ -42,6 +44,9 @@ export type QueuedDeliveryPayload = {
   accountId?: string;
   queuePolicy?: "required" | "best_effort";
   requireUnknownSendReconciliation?: boolean;
+  retryAmbiguousFinalText?: true;
+  /** The failed attempt had typed transport ambiguity and no accepted identity. */
+  ambiguousTransportError?: true;
   requiresProducerClaim?: boolean;
   preparedBatch?: PreparedOutboundBatch;
   payloads?: ReplyPayload[];

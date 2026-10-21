@@ -241,8 +241,8 @@ COPY --from=dependency-inputs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 # If you change these annotations, also update:
 # - docs/install/docker.md ("Base image metadata" section)
 # - https://docs.openclaw.ai/install/docker
-LABEL io.openclaw.custom.release="2026.8.35-C" \
-  org.opencontainers.image.version="2026.8.35-C" \
+LABEL io.openclaw.custom.release="2026.8.35-D" \
+  org.opencontainers.image.version="2026.8.35-D" \
   org.opencontainers.image.source="https://github.com/openclaw/openclaw" \
   org.opencontainers.image.url="https://openclaw.ai" \
   org.opencontainers.image.documentation="https://docs.openclaw.ai/install/docker" \

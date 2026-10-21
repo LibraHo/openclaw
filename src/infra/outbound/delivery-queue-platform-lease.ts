@@ -3,6 +3,7 @@ import {
   dispatchDeliveryQueueEntryPlatformSend,
   renewDeliveryQueueEntryPlatformSendLease,
 } from "../delivery-queue-sqlite-claim.js";
+import type { DeliveryQueueEntryState } from "../delivery-queue-sqlite.js";
 import { OUTBOUND_DELIVERY_QUEUE_NAME } from "./delivery-queue-media-staging.js";
 
 /** Atomically transfer a stable pending producer intent to one platform sender. */
@@ -11,11 +12,13 @@ export async function claimDeliveryPlatformSendAttempt(
   stateDir?: string,
   reconciledPlatformSendStartedAt?: number,
   reconciledPlatformSendAttemptId?: string,
+  allowUnknownSendReplay?: true,
 ): Promise<string | undefined> {
   return claimDeliveryQueueEntryPlatformSend({
     queueName: OUTBOUND_DELIVERY_QUEUE_NAME,
     id,
     stateDir,
+    ...(allowUnknownSendReplay ? { allowUnknownSendReplay } : {}),
     ...(reconciledPlatformSendStartedAt !== undefined ? { reconciledPlatformSendStartedAt } : {}),
     ...(reconciledPlatformSendAttemptId !== undefined ? { reconciledPlatformSendAttemptId } : {}),
   });
@@ -65,4 +68,19 @@ export function markOwnedDeliveryPlatformSendDispatched(
   if (!dispatched) {
     throw new Error(`Delivery platform claim was lost: ${id}`);
   }
+}
+
+/** Lease owner eligibility shared by admission and recovery inspection. */
+export function hasActiveDeliveryOwner(entry: DeliveryQueueEntryState, now: number): boolean {
+  return (
+    (typeof entry.completionRetention === "object" ||
+      entry.completionRetention === "permanent" ||
+      entry.requiresProducerClaim === true) &&
+    (entry.recoveryState === "producer_claimed" ||
+      ((entry.recoveryState === "send_attempt_started" ||
+        entry.recoveryState === "unknown_after_send") &&
+        entry.requiresProducerClaim === true)) &&
+    typeof entry.availableAt === "number" &&
+    entry.availableAt > now
+  );
 }

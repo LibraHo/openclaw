@@ -1,23 +1,37 @@
 {
-  "customRelease": "2026.8.35-C",
+  "customRelease": "2026.8.35-D",
   "upstreamVersion": "2026.8.35",
   "upstreamCommit": "713ba5785d72d6ed1cec971e21307f16cc4234a6",
-  "previousRelease": "2026.8.35-B",
-  "previousSourceCommit": "63e0adeabec1a8f3264b4852c46d9282187a6623",
-  "deployment": "candidate only; production remains 2026.8.35-A",
+  "previousRelease": "2026.8.35-C",
+  "previousSourceCommit": "06aadf04949b9aaa0d2665c952124df700ccc191",
+  "deployment": "candidate build only; running production remains 2026.8.35-C",
   "addedOfficialPRs": [
-    168400,
-    169728,
-    166782,
-    135653
+    140388,
+    156842,
+    168738,
+    169010,
+    165444,
+    164633,
+    169029
   ],
   "officialSourceCommits": {
     "168400": "4fcac11846800494f7b25f795d039be1ed505a62",
     "169728": "910a2c1b30857b3b96a456da86a1e72d69d3ebba",
     "166782": "3a2160c77f400843c312edd6b7d993057a3cf3c8",
-    "135653": "9e45fd9db7192ba82186f8115feeeacb0603eb24"
+    "135653": "9e45fd9db7192ba82186f8115feeeacb0603eb24",
+    "156842": "5331425e597912be4b7113a4e045d60b3b5d9170",
+    "169010": "f56818ae76ac1f4e0165b7fd78e7d25cf149236a",
+    "169029": "ce5b795128e359ebebd9df80bdcfaf0258659a5a",
+    "165444": "4995bef8fdcfa2c5776194d2a0c095a99e46ef29",
+    "164633": "d2dec0c9cfcd4979d6916646090d4a60b434ed0d",
+    "140388": "cb1b3be8fb9821adddb30a9983e552ae9989c19f",
+    "168738": "756b2650a8544f5c0b852a00024e58e54c40eb46"
   },
   "preservedOfficialPRs": [
+    168400,
+    169728,
+    166782,
+    135653,
     165072,
     164649,
     152210,

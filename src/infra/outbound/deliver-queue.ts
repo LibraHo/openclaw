@@ -4,6 +4,7 @@ import { createRenderedMessageBatchPlan } from "../../channels/message/rendered-
 import { createSubsystemLogger } from "../../logging/subsystem.js";
 import { getGlobalHookRunner } from "../../plugins/hook-runner-global.js";
 import { formatErrorMessage } from "../errors.js";
+import { resolveOutboundChannelMessageAdapter } from "./channel-resolution.js";
 import { resolveDeferredDeliveryAdmission } from "./deferred-delivery-admission.js";
 import { resolveOutboundDurableFinalDeliverySupport } from "./deliver-channel.js";
 import type { DeliverOutboundPayloadsParams } from "./deliver-contracts.js";
@@ -16,7 +17,7 @@ import {
 } from "./deliver-queue-admission.js";
 import { deliverOutboundPayloadsWithQueueCleanup } from "./deliver-queue-execute.js";
 import { createQueuedDeliveryOwner } from "./deliver-queue-state.js";
-import type { OutboundDeliveryResult } from "./deliver-types.js";
+import type { OutboundDeliveryResult, OutboundPayloadDeliveryOutcome } from "./deliver-types.js";
 import { markDurableDeliveryQueued } from "./delivery-completion.js";
 import { startDeliveryProducerLease } from "./delivery-queue-lease.js";
 import {
@@ -28,8 +29,14 @@ import {
   withStableDeliveryPreparation,
   type StableDeliveryPreparationOwner,
 } from "./delivery-queue-preparation.js";
-import { withActiveDeliveryClaim } from "./delivery-queue-recovery.js";
-import { findDeliveryIntentOwner, loadPendingDelivery } from "./delivery-queue-storage.js";
+import { isOrdinaryFinalText } from "./delivery-queue-recovery-policy.js";
+import { recoverLiveFinalDelivery, withActiveDeliveryClaim } from "./delivery-queue-recovery.js";
+import {
+  findDeliveryIntentOwner,
+  loadPendingDelivery,
+  reserveDeliveryAttempt,
+} from "./delivery-queue-storage.js";
+import { FINAL_TEXT_RECOVERY_MAX_ATTEMPTS } from "./delivery-queue-types.js";
 import { createMessageSentEmitter } from "./message-sent-hook.js";
 import {
   emitOutboundAuditLifecycle,
@@ -276,10 +283,23 @@ async function runOutboundDeliveryWithQueue(
       (params.requireUnknownSendReconciliation === true ||
         support.automaticUnknownSendReconciliation);
   }
+  const isTextOnlyChannelData =
+    params.retryAmbiguousFinalText === true && preparedPayloads[0]?.channelData !== undefined
+      ? resolveOutboundChannelMessageAdapter({
+          cfg: params.cfg,
+          agentId: params.session?.agentId,
+          channel,
+        })?.durableFinal?.isTextOnlyChannelData
+      : undefined;
   const deliveryParams: DeliverOutboundPayloadsParams = {
     ...params,
     payloads: preparedPayloads,
     preparedBatch,
+    retryAmbiguousFinalText:
+      params.retryAmbiguousFinalText === true &&
+      isOrdinaryFinalText(preparedPayloads, isTextOnlyChannelData)
+        ? true
+        : undefined,
     // Recovery must preserve the provider-facing plan captured before local
     // media was rewritten to spool paths; reconciliation uses that same plan.
     renderedBatchPlan: preparedRenderedBatchPlan,
@@ -387,12 +407,88 @@ async function runOutboundDeliveryWithQueue(
         deliveryProducerLeaseRequired: true,
       };
     }
-    return deliverWithProducerLease(
-      claimedDeliveryParams,
-      queueId,
-      auditStartedAt,
-      producerClaimId,
-    );
+    if (claimedDeliveryParams.retryAmbiguousFinalText !== true) {
+      return await deliverWithProducerLease(
+        claimedDeliveryParams,
+        queueId,
+        auditStartedAt,
+        producerClaimId,
+      );
+    }
+    const outcomes: OutboundPayloadDeliveryOutcome[] = [];
+    let finalError: Parameters<NonNullable<typeof claimedDeliveryParams.onError>> | undefined;
+    const publishOutcomes = () => {
+      for (const outcome of outcomes) {
+        claimedDeliveryParams.onPayloadDeliveryOutcome?.(outcome);
+      }
+    };
+    try {
+      const reservation = await reserveDeliveryAttempt(
+        queueId,
+        FINAL_TEXT_RECOVERY_MAX_ATTEMPTS,
+        undefined,
+        producerClaimId,
+      );
+      if (reservation.status === "exhausted") {
+        throw new Error("delivery retry budget exhausted");
+      }
+      const results = await deliverWithProducerLease(
+        {
+          ...claimedDeliveryParams,
+          onPayloadDeliveryOutcome: (outcome) => outcomes.push(outcome),
+          onError: (error, payload) => {
+            finalError = [error, payload];
+          },
+        },
+        queueId,
+        auditStartedAt,
+        producerClaimId,
+      );
+      publishOutcomes();
+      if (finalError) {
+        claimedDeliveryParams.onError?.(...finalError);
+      }
+      return results;
+    } catch (error) {
+      const recovered = await recoverLiveFinalDelivery({
+        entryId: queueId,
+        cfg: params.cfg,
+        log,
+        shouldContinue: () => !params.abortSignal?.aborted,
+        deliver: (recoveryParams) =>
+          runOutboundDeliveryInternal({
+            ...recoveryParams,
+            deps: claimedDeliveryParams.deps,
+            abortSignal:
+              claimedDeliveryParams.abortSignal && recoveryParams.abortSignal
+                ? AbortSignal.any([claimedDeliveryParams.abortSignal, recoveryParams.abortSignal])
+                : (claimedDeliveryParams.abortSignal ?? recoveryParams.abortSignal),
+            assertDirectAdapterHandoff: () => {
+              recoveryParams.assertDirectAdapterHandoff?.();
+              claimedDeliveryParams.assertDirectAdapterHandoff?.();
+            },
+            onPlatformSendDispatch: async () => {
+              await recoveryParams.onPlatformSendDispatch?.();
+              await claimedDeliveryParams.onPlatformSendDispatch?.();
+            },
+            onError: (retryError, payload) => {
+              finalError = [retryError, payload];
+            },
+          }),
+      });
+      if (recovered.status !== "not-attempted") {
+        outcomes.length = 0;
+        outcomes.push(...recovered.payloadOutcomes);
+      }
+      publishOutcomes();
+      if (recovered.status === "recovered") {
+        return recovered.results;
+      }
+      if (finalError) {
+        claimedDeliveryParams.onError?.(...finalError);
+      }
+      throw recovered.status === "failed" ? recovered.error : error;
+    }
   };
   if (stableIntentClaimHeld) {
     return await deliverClaimedIntent();

@@ -15,6 +15,7 @@ type PlatformClaimParams = {
   requiresProducerClaim?: boolean;
   reconciledPlatformSendAttemptId?: string;
   reconciledPlatformSendStartedAt?: number;
+  allowUnknownSendReplay?: true;
 };
 
 export const PLATFORM_SEND_OWNER_LEASE_MS = 30_000;
@@ -122,7 +123,8 @@ export function claimDeliveryQueueEntryPlatformSend(
   const claimId = generateSecureUuid();
   return transitionDeliveryQueueEntryPlatformSend(params, "claim", (entry, now) => {
     const reconciledNotSent =
-      entry.recoveryState === "send_attempt_started" &&
+      (entry.recoveryState === "send_attempt_started" ||
+        (entry.recoveryState === "unknown_after_send" && params.allowUnknownSendReplay === true)) &&
       typeof params.reconciledPlatformSendStartedAt === "number" &&
       entry.platformSendStartedAt === params.reconciledPlatformSendStartedAt &&
       typeof params.reconciledPlatformSendAttemptId === "string" &&
