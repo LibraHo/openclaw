@@ -1,5 +1,6 @@
 import type { AgentMessage } from "openclaw/plugin-sdk/agent-harness-runtime";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { buildCodexMessagesSnapshot } from "./event-projector-snapshot.js";
 import { captureCodexSettledTurnFinalizationContext } from "./settled-turn-context.js";
 import { attachCodexMirrorAttestation } from "./transcript-mirror-attestation.js";
 import {
@@ -88,6 +89,36 @@ async function captureContext(params: {
 describe("captureCodexSettledTurnFinalizationContext", () => {
   beforeEach(() => {
     mocks.readHistory.mockReset();
+  });
+
+  it("accepts checkpointed tools followed by terminal aggregate reasoning", async () => {
+    const settledMessages = buildCodexMessagesSnapshot({
+      runParams: { prompt: "Send it.", sessionId: "session", trigger: "user" } as never,
+      turnId: "turn-2",
+      upstreamUserText: undefined,
+      reasoningText: "The action completed once.",
+      asyncMessages: [],
+      commentaryMessages: [],
+      toolMessages: settledTurn().slice(1),
+      lastAssistant: undefined,
+      createAssistantMirrorMessage: (_title, text) =>
+        ({
+          role: "assistant",
+          content: [{ type: "thinking", thinking: text }],
+          timestamp: 4,
+        }) as never,
+    });
+    const reasoning = settledMessages.find(
+      (entry) => readMirrorIdentity(entry) === "turn-2:reasoning",
+    )!;
+    const checkpointOrder = [...settledMessages.filter((entry) => entry !== reasoning), reasoning];
+    const context = await captureContext({
+      historyMessages: checkpointOrder,
+      mirroredMessages: checkpointOrder,
+      settledMessages,
+    });
+    expect(context?.data).toHaveLength(3);
+    expect(context?.data.at(-1)).toMatchObject({ type: "function_call_output", call_id: "call-2" });
   });
 
   it("freezes the complete active branch exactly through the current tool-result boundary", async () => {

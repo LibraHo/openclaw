@@ -1,3 +1,32 @@
+# Custom OpenClaw 2026.8.35-E
+
+Candidate based on D; all seven D backports retained. Production remains C until a separate deployment. Keep Node24.15.0, UI source, dependency locks, database schema versions and all global/agent default models.
+
+## Added and adapted
+
+- #185310: preserve checkpointed commentary/tools before terminal aggregate reasoning so verified finalization history keeps its real order. Identity/provenance checks stay strict.
+- #139933: allowlisted history rejection diagnostics through the existing synchronous reader/capture; no raw transcript or exception text, no new worker, unchanged size/pairing/provenance gates.
+- #185351: passive finalizer instructions explicitly request a plain-text summary without tool calls or repeated actions.
+- #165179: disable embedded auto-compaction for settled-tool-finalization at both preparation passes; ordinary compaction unchanged. This is not the Codex private-stdio finalizer.
+- #160433: bounded logging mkdir at startup, rollover and size rotation; the first lost rollover record still reaches the redacted warning. Existing Windows subprocess test uses a file URL for --import.
+- #167470: authoritative Telegram local rejection before transport; carry proven no-send=false evidence without converting ambiguous/partial sends to safe retries. No newer preview lifecycle imported.
+- #169202: retain the same still-pending Telegram update ID as retryable; keep semantic/different-ID duplicate suppression. Existing ingress drain already supports the outcome.
+- #171564 slice: only proven pre-connect ETIMEDOUT with connect/getaddrinfo syscall and all aggregate causes. Existing DNS defaults and explicit network configuration remain unchanged.
+- #168011: GIF/animation uses the existing video attachment framing, preserves captions and one download; does not add a video model.
+- #167953: retain unknown bare angle placeholders/generic parameters while stripping actual/paired HTML tags.
+- #166493: reduce repeated render work when splitting long formatted replies using existing renderer/token boundaries; preserve surrogate handling and exact fallback.
+- GPT-6.1 Terra: distinct manifest metadata/pricing, Responses and subscription routes, supported efforts and medium default. Live account capability lists remain authoritative; offline discovery does not grant access. Existing defaults and5.6Terra retained.
+
+#168016 verbose delivery behavior is already present and is regression-verified rather than reapplied. No new streaming setting is enabled.
+
+## Proof boundaries
+
+Official model contract: https://developers.openai.com/api/docs/models/gpt-6.1-terra . Canonical OpenClaw auth injection into an isolated native Codex0.162.0 process on NAS Node24.15 completed a real gpt-6.1-terra turn with TERRA_CONNECTION_OK. Standalone unauthenticated CLI401 and old C route refusals were setup failures, not model unavailability. No real Telegram message or broker operation was sent.
+
+Source RED/GREEN, types/lint/review, frozen source and compiled Linux stale-parent/retained-logger behavior are required before declaring the candidate built. Single NAS build uses original .env and resource cap; no separate runtime test containers, production backup, retagging or deployment.
+
+Deferred newer architecture: #167756,#177716,#174530,#169529,#173366,#167567,#176422. #171573 requires separate per-stream sanitizer ownership adaptation. No UI/cloud/PostgreSQL migration/eager memory service. D saved-text recovery still covers eligible ordinary final text only, not all cron/completion/media sends.
+
 # Custom OpenClaw 2026.8.35-D
 
 Candidate based on custom 8.35-C. Compilation does not switch the running Gateway. UI, package/plugin versions, dependency locks, and database schema versions remain on 2026.8.35. All C/A/B fixes and custom apt/entrypoint settings are retained.

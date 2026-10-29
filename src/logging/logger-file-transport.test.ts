@@ -1,7 +1,7 @@
 // Logger file transport tests cover async ordering, overflow, and exit durability.
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
-import { fileURLToPath } from "node:url";
+import path from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { appendRegularFile } from "../infra/regular-file.js";
 import { createSuiteLogPathTracker } from "./log-test-helpers.js";
@@ -37,6 +37,43 @@ afterAll(async () => {
 });
 
 describe("async logger file transport", () => {
+  it("bounds directory creation when a resolvable parent refuses new children", () => {
+    const logDir = `${logPathTracker.nextPath()}-stale`;
+    const mkdir = fs.mkdirSync.bind(fs);
+    let attempts = 0;
+    vi.spyOn(fs, "mkdirSync").mockImplementation((target, options) => {
+      if (String(target) !== logDir) {
+        return mkdir(target, options);
+      }
+      attempts += 1;
+      // Fail immediately rather than hanging the worker on Node's recursive mkdir bug.
+      if (typeof options === "object" && options?.recursive) {
+        throw new Error("recursive mkdir would block on a stale mount");
+      }
+      throw Object.assign(new Error("parent refuses children"), { code: "ENOENT" });
+    });
+    setLoggerOverride({ level: "info", file: path.join(logDir, "openclaw.log") });
+
+    expect(() => getLogger()).toThrowError(expect.objectContaining({ code: "ENOENT" }));
+    expect(attempts).toBe(2);
+  });
+
+  it("creates missing nested log directories without recursive mkdir", async () => {
+    const logDir = path.join(`${logPathTracker.nextPath()}-nested`, "child");
+    const mkdir = fs.mkdirSync.bind(fs);
+    vi.spyOn(fs, "mkdirSync").mockImplementation((target, options) => {
+      if (typeof options === "object" && options?.recursive) {
+        throw new Error("recursive mkdir would block on a stale mount");
+      }
+      return mkdir(target, options);
+    });
+    const file = path.join(logDir, "openclaw.log");
+    setLoggerOverride({ level: "info", file });
+    getLogger().info("nested-directory-record");
+    await testApi.flushFileLogQueueForTests();
+    expect(fs.readFileSync(file, "utf8")).toContain("nested-directory-record");
+  });
+
   it("installs process hooks only while file logging is active", () => {
     const beforeExitListeners = process.listenerCount("beforeExit");
     const exitListeners = process.listenerCount("exit");
@@ -174,7 +211,7 @@ describe("async logger file transport", () => {
   it("writes a piped append warning before process exit", () => {
     const logPath = logPathTracker.nextPath();
     fs.mkdirSync(logPath);
-    const loaderPath = fileURLToPath(new URL("../../scripts/tsx.mjs", import.meta.url));
+    const loaderUrl = new URL("../../scripts/tsx.mjs", import.meta.url).href;
     const loggerUrl = new URL("./logger.ts", import.meta.url).href;
     const script = `
       import { getLogger, setLoggerOverride } from ${JSON.stringify(loggerUrl)};
@@ -190,7 +227,7 @@ describe("async logger file transport", () => {
 
     const result = spawnSync(
       process.execPath,
-      ["--import", loaderPath, "--input-type=module", "--eval", script],
+      ["--import", loaderUrl, "--input-type=module", "--eval", script],
       {
         encoding: "utf8",
         env: { ...process.env, VITEST: "false" },
@@ -198,7 +235,7 @@ describe("async logger file transport", () => {
     );
 
     expect(result.error).toBeUndefined();
-    expect(result.status).toBe(0);
+    expect(result.status, result.stderr).toBe(0);
     expect(result.stderr).toContain("log file append failed; record dropped");
   });
 

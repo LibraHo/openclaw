@@ -22,6 +22,23 @@ function renderEscapedHtml(ir: MarkdownIR): string {
 }
 
 describe("renderMarkdownIRChunksWithinLimit", () => {
+  it("bounds render work for long escaped formatted replies", () => {
+    const ir = markdownToIR("**a < b** ".repeat(600));
+    let renders = 0;
+    const chunks = renderMarkdownIRChunksWithinLimit({
+      ir,
+      limit: 1_000,
+      renderChunk: (source) => {
+        renders += 1;
+        return renderEscapedHtml(source);
+      },
+      measureRendered: (rendered) => rendered.length,
+    });
+    expect(chunks.map((chunk) => chunk.source.text).join("")).toBe(ir.text);
+    expect(chunks.every((chunk) => chunk.rendered.length <= 1_000)).toBe(true);
+    expect(renders).toBeLessThan(200);
+  });
+
   it("prefers word boundaries when escaping shrinks the render budget", () => {
     const ir = markdownToIR("alpha <<");
     const chunks = renderMarkdownIRChunksWithinLimit({

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createDeliveryRecoveryCoordinator,
   isDeliveryRecoveryRetryEligible,
+  isProvenDeliveryNotSentError,
   resolveDeliveryNotSentRetryability,
   resolveDeliveryRecoveryDeadlineMs,
 } from "./delivery-recovery.shared.js";
@@ -23,6 +24,27 @@ function createEntry(id: string, enqueuedAt: number): RecoveryTestEntry {
 }
 
 describe("typed no-send retryability", () => {
+  it.each(["connect", "read"])(
+    "requires every wrapped timeout branch to prove no-send: %s",
+    (syscall) => {
+      const error = Object.assign(new Error("Network request for 'sendMessage' failed!"), {
+        name: "HttpError",
+        error: new TypeError("fetch failed", {
+          cause: Object.assign(
+            new AggregateError([
+              Object.assign(new Error("IPv6 route unavailable"), {
+                code: "ENETUNREACH",
+                syscall: "connect",
+              }),
+              Object.assign(new Error("IPv4 timeout"), { code: "ETIMEDOUT", syscall }),
+            ]),
+            { code: "ETIMEDOUT" },
+          ),
+        }),
+      });
+      expect(isProvenDeliveryNotSentError(error)).toBe(syscall === "connect");
+    },
+  );
   const retryableMarker = () =>
     new PlatformMessageNotDispatchedError("Outbound not configured for channel: proof", {
       cause: new Error("adapter unavailable"),

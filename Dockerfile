@@ -241,8 +241,8 @@ COPY --from=dependency-inputs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 # If you change these annotations, also update:
 # - docs/install/docker.md ("Base image metadata" section)
 # - https://docs.openclaw.ai/install/docker
-LABEL io.openclaw.custom.release="2026.8.35-D" \
-  org.opencontainers.image.version="2026.8.35-D" \
+LABEL io.openclaw.custom.release="2026.8.35-E" \
+  org.opencontainers.image.version="2026.8.35-E" \
   org.opencontainers.image.source="https://github.com/openclaw/openclaw" \
   org.opencontainers.image.url="https://openclaw.ai" \
   org.opencontainers.image.documentation="https://docs.openclaw.ai/install/docker" \
@@ -455,6 +455,7 @@ RUN COREPACK_ENABLE_NETWORK=0 PNPM_CONFIG_OFFLINE=true pnpm --version
 # Check the final runtime inside the same bounded build, without separate test containers.
 RUN --network=none --mount=type=bind,source=maintenance-build-checks,target=/tmp/openclaw-build-checks \
     OPENCLAW_STATE_DIR=/tmp/openclaw-build-smoke node /tmp/openclaw-build-checks/check-runtime.mjs && \
+    node /tmp/openclaw-build-checks/check-logging.mjs && \
     OPENCLAW_STATE_DIR=/tmp/openclaw-build-smoke node /app/openclaw.mjs memory reset --help > /tmp/openclaw-memory-reset-help && \
     grep -q -- '--yes' /tmp/openclaw-memory-reset-help && \
     rm -f /tmp/openclaw-memory-reset-help

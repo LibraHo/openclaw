@@ -2,6 +2,7 @@
 import fs from "node:fs";
 import fsPromises from "node:fs/promises";
 import path from "node:path";
+import { extractErrorCode } from "../infra/errors.js";
 import { appendRegularFile, appendRegularFileSync } from "../infra/regular-file.js";
 import { formatConsoleDiagnosticLine } from "./json-console-line.js";
 import { redactSensitiveText } from "./redact.js";
@@ -50,9 +51,28 @@ function rotatedLogPath(file: string, index: number): string {
   return `${base}.${index}${ext}`;
 }
 
+/** A stale mounted parent can make Node's recursive mkdir loop forever. */
+export function ensureLogDirectorySync(dir: string, createParents = true): void {
+  try {
+    fs.mkdirSync(dir);
+  } catch (error) {
+    const code = extractErrorCode(error);
+    if (code === "EEXIST" && fs.statSync(dir).isDirectory()) {
+      return;
+    }
+    const parent = path.dirname(dir);
+    if (!createParents || code !== "ENOENT" || parent === dir) {
+      throw error;
+    }
+    ensureLogDirectorySync(parent);
+    // Retry each missing child once; a parent that still refuses it is terminal.
+    ensureLogDirectorySync(dir, false);
+  }
+}
+
 function rotateLogFile(file: string): boolean {
   try {
-    fs.mkdirSync(path.dirname(file), { recursive: true });
+    ensureLogDirectorySync(path.dirname(file));
     fs.rmSync(rotatedLogPath(file, MAX_ROTATED_LOG_FILES), { force: true });
     for (let index = MAX_ROTATED_LOG_FILES - 1; index >= 1; index -= 1) {
       const from = rotatedLogPath(file, index);

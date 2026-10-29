@@ -3,7 +3,10 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { GrammyError } from "grammy";
-import { createChannelIngressQueueForTests } from "openclaw/plugin-sdk/channel-ingress-test-runtime";
+import {
+  createChannelIngressQueueForTests,
+  closeOpenClawStateDatabaseForTest,
+} from "openclaw/plugin-sdk/channel-ingress-test-runtime";
 import type { OpenClawConfig } from "openclaw/plugin-sdk/config-contracts";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -24,6 +27,7 @@ async function withTempState<T>(fn: (stateDir: string) => Promise<T>): Promise<T
   try {
     return await fn(stateDir);
   } finally {
+    closeOpenClawStateDatabaseForTest();
     await fs.rm(stateDir, { recursive: true, force: true });
   }
 }

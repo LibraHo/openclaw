@@ -196,6 +196,14 @@ export function createTelegramBotCore(
   bot.use(async (ctx, next) => {
     const begin = updateTracker.beginUpdate(ctx);
     if (!begin.accepted) {
+      recordTelegramMessageProcessingResult(
+        begin.reason === "pending"
+          ? {
+              kind: "failed-retryable",
+              error: new Error("Telegram update processing is still pending"),
+            }
+          : { kind: "skipped" },
+      );
       return;
     }
     try {

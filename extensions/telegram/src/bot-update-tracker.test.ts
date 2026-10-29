@@ -40,6 +40,21 @@ function expectTrackerState(
 }
 
 describe("createTelegramUpdateTracker", () => {
+  it("distinguishes pending exact-id retries from terminal semantic duplicates", () => {
+    const tracker = createTelegramUpdateTracker({ initialUpdateId: null });
+    const first = updateCtx(10);
+    const begun = tracker.beginUpdate(first);
+    expect(begun.accepted).toBe(true);
+    expect(tracker.beginUpdate(first)).toEqual({ accepted: false, reason: "pending" });
+    const semantic = { callbackQuery: { id: "callback-control" } };
+    expect(tracker.beginUpdate(semantic).accepted).toBe(true);
+    expect(tracker.beginUpdate(semantic)).toEqual({ accepted: false, reason: "semantic-dedupe" });
+    if (!begun.accepted) {
+      throw new Error("expected accepted update");
+    }
+    tracker.finishUpdate(begun.update, { completed: true });
+    expect(tracker.beginUpdate(first)).toEqual({ accepted: false, reason: "accepted-watermark" });
+  });
   it("persists accepted offsets before earlier pending updates complete", async () => {
     const onAcceptedUpdateId = vi.fn();
     const tracker = createTelegramUpdateTracker({
@@ -321,11 +336,10 @@ describe("createTelegramUpdateTracker", () => {
       tracker.finishUpdate(begun.update, { completed: true });
     }
 
-    // Pending ids stay in the numeric set (never pruned) so re-begin is rejected
-    // as accepted-watermark, not re-dispatched.
+    // Pending ids stay in the numeric set, but rejection is not a terminal fact.
     expect(tracker.beginUpdate(updateCtx(pendingId))).toEqual({
       accepted: false,
-      reason: "accepted-watermark",
+      reason: "pending",
     });
     const failedRetry = tracker.beginUpdate(updateCtx(failedId));
     if (!failedRetry.accepted) {

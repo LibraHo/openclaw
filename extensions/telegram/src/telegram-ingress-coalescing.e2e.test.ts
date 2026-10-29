@@ -14,8 +14,10 @@ import {
 } from "openclaw/plugin-sdk/plugin-state-test-runtime";
 import type { MsgContext } from "openclaw/plugin-sdk/reply-runtime";
 import type { RuntimeEnv } from "openclaw/plugin-sdk/runtime-env";
+import { closeOpenClawAgentDatabasesForTest } from "openclaw/plugin-sdk/sqlite-runtime-testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TelegramBotDeps } from "./bot-deps.js";
+import { runWithTelegramUpdateProcessingFrame } from "./bot-processing-outcome.js";
 import { telegramBotInfoForTest } from "./bot.create-telegram-bot.test-support.js";
 import { runTelegramChannelInboundEventWithHarness } from "./bot.test-helpers.js";
 import type { TelegramTransport } from "./fetch.js";
@@ -265,6 +267,7 @@ describe("Telegram durable ingress coalescing", () => {
         await telegramTransport.close();
       }),
     );
+    closeOpenClawAgentDatabasesForTest();
     closeOpenClawStateDatabaseForTest();
     resetPluginStateStoreForTests({ closeDatabase: false });
     if (originalStateDir === undefined) {
@@ -317,10 +320,44 @@ describe("Telegram durable ingress coalescing", () => {
         : { adoptionStallTimeoutMs: options.adoptionStallTimeoutMs }),
       pollIntervalMs: 10,
     });
-    const resources = { monitor, telegramTransport, abortController };
+    const resources = { monitor, telegramTransport, abortController, bot };
     activeResources.push(resources);
     return resources;
   }
+
+  it("records a retryable result while an exact-id middleware owner is still running", async () => {
+    let entered!: () => void;
+    let release!: () => void;
+    const enteredPromise = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const releasePromise = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    downstreamTurns.mockImplementationOnce(async () => {
+      entered();
+      await releasePromise;
+      return { queuedFinal: false, counts: { block: 0, final: 0, tool: 0 } };
+    });
+    const { bot } = await createMonitor();
+    const forwarded = forwardedTextUpdate({ updateId: 800, messageId: 1, text: "pending control" });
+    const update = { ...forwarded, message: { ...forwarded.message, forward_origin: undefined } };
+    const original = bot.handleUpdate(update);
+    try {
+      await enteredPromise;
+      const duplicate = await runWithTelegramUpdateProcessingFrame(() => bot.handleUpdate(update));
+      expect(duplicate.result).toMatchObject({ kind: "failed-retryable" });
+      expect(downstreamTurns).toHaveBeenCalledTimes(1);
+    } finally {
+      release();
+      await original;
+    }
+    const completedReplay = await runWithTelegramUpdateProcessingFrame(() =>
+      bot.handleUpdate(update),
+    );
+    expect(completedReplay.result).toEqual({ kind: "skipped" });
+    expect(downstreamTurns).toHaveBeenCalledTimes(1);
+  });
 
   it("coalesces album members admitted a few milliseconds apart", async () => {
     const { monitor, telegramTransport } = await createMonitor();

@@ -10,6 +10,16 @@ import {
 } from "./format.js";
 
 describe("markdownToTelegramHtml", () => {
+  it("keeps the longest fitting prefix when a token stops looking like a file reference", () => {
+    const input = `${"<".repeat(995)}docs/x.mdbar${"<".repeat(1001)}`;
+    const chunks = markdownToTelegramChunks(input, 4_000);
+    expect(chunks.map((chunk) => chunk.text)).toEqual([
+      `${"<".repeat(995)}docs/x.mdbar<<`,
+      "<".repeat(999),
+    ]);
+    expect(chunks.map((chunk) => chunk.html.length)).toEqual([4_000, 3_996]);
+  });
+
   it("marks assistant-authored transcript role headers after parsing Markdown", () => {
     expect(markdownToTelegramHtml("**user**[Thu 2026-07-02] question")).toBe(
       "<code>user[Thu 2026-07-02]</code> question",

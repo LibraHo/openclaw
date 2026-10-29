@@ -245,20 +245,27 @@ describe("durable inbound reply delivery", () => {
       }),
     },
     { label: "ambiguous first-send", error: new Error("socket closed") },
-  ])("keeps a $label failure non-visible and preserves its retry contract", async ({ error }) => {
-    mocks.sendDurableMessageBatch.mockResolvedValueOnce({ status: "failed", error });
+  ])(
+    "keeps a $label failure non-visible and preserves its retry contract",
+    async ({ error, label }) => {
+      mocks.sendDurableMessageBatch.mockResolvedValueOnce({ status: "failed", error });
 
-    const result = await deliverInboundReplyWithMessageSendContextCore({
-      cfg: {},
-      channel: "telegram",
-      agentId: "main",
-      info: { kind: "final" },
-      payload: { text: "final" },
-      ctxPayload: ctxPayload({ OriginatingTo: "chat-1" }),
-    });
+      const result = await deliverInboundReplyWithMessageSendContextCore({
+        cfg: {},
+        channel: "telegram",
+        agentId: "main",
+        info: { kind: "final" },
+        payload: { text: "final" },
+        ctxPayload: ctxPayload({ OriginatingTo: "chat-1" }),
+      });
 
-    expect(result).toEqual({ status: "failed", error });
-    expect(error).not.toHaveProperty("visibleReplySent");
-    expect(error).not.toHaveProperty("sentBeforeError");
-  });
+      expect(result).toEqual({
+        status: "failed",
+        error,
+        ...(label === "proven no-dispatch" ? { sentBeforeError: false } : {}),
+      });
+      expect(error).not.toHaveProperty("visibleReplySent");
+      expect(error).not.toHaveProperty("sentBeforeError");
+    },
+  );
 });

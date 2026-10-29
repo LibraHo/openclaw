@@ -70,6 +70,16 @@ describe("buildCodexMessagesSnapshot", () => {
     );
   });
 
+  it("keeps checkpointed work before terminal aggregate reasoning", () => {
+    const messages = buildSnapshot("user");
+    const reasoning = messages.findIndex(
+      (message) => readMirrorIdentity(message) === "turn-1:reasoning",
+    );
+    const tool = messages.findLastIndex((message) => message.role === "toolResult");
+    expect(reasoning).toBeGreaterThan(tool);
+    expect(readMirrorIdentity(messages.at(-1)!)).toBe("turn-1:assistant");
+  });
+
   it("retains distinct completed item identities across steers without replaying the terminal answer", async () => {
     const projector = await createProjector();
     for (const id of ["answer-a", "answer-b"]) {

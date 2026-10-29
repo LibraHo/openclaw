@@ -56,6 +56,7 @@ import {
   OPENAI_GPT_56_TERRA_MODEL_ID,
   OPENAI_GPT_6_ASTRA_MODEL_ID,
   OPENAI_GPT_61_SOL_MODEL_ID,
+  OPENAI_GPT_61_TERRA_MODEL_ID,
   OPENAI_PROVIDER_MODERN_MODEL_IDS,
   isOpenAIPlatformOnlyRouteModelId,
   isOpenAISubscriptionOnlyRouteModelId,
@@ -535,6 +536,7 @@ function buildOpenAICodexStaticProviderConfig(): ModelProviderConfig {
       if (
         modelId === OPENAI_GPT_6_ASTRA_MODEL_ID ||
         modelId === OPENAI_GPT_61_SOL_MODEL_ID ||
+        modelId === OPENAI_GPT_61_TERRA_MODEL_ID ||
         (modelId.startsWith("gpt-5.6") && modelId !== OPENAI_GPT_56_SOL_MODEL_ID)
       ) {
         return [];
@@ -799,6 +801,10 @@ function buildOpenAIUnknownModelHint(modelId: string): string | undefined {
 
 const OPENAI_GPT_FORWARD_COMPAT_CASES = [
   {
+    match: [OPENAI_GPT_61_TERRA_MODEL_ID],
+    templateIds: [OPENAI_GPT_61_TERRA_MODEL_ID, OPENAI_GPT_56_TERRA_MODEL_ID],
+  },
+  {
     match: [OPENAI_GPT_61_SOL_MODEL_ID],
     templateIds: [OPENAI_GPT_61_SOL_MODEL_ID, OPENAI_GPT_56_SOL_MODEL_ID],
   },
@@ -853,6 +859,7 @@ function resolveOpenAIGptForwardCompatModel(ctx: ProviderResolveDynamicModelCont
   if (
     modelId === OPENAI_GPT_6_ASTRA_MODEL_ID ||
     modelId === OPENAI_GPT_61_SOL_MODEL_ID ||
+    modelId === OPENAI_GPT_61_TERRA_MODEL_ID ||
     modelId === OPENAI_GPT_56_SOL_MODEL_ID ||
     modelId === OPENAI_GPT_56_TERRA_MODEL_ID ||
     modelId === OPENAI_GPT_56_LUNA_MODEL_ID

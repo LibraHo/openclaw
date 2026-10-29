@@ -9,6 +9,9 @@ export { stripInternalRuntimeScaffolding };
 
 // A tag name ends at whitespace, `/`, or `>`; `<user@example.com>` is prose, not markup.
 const HTML_TAG_RE = /<\/?[a-z][a-z0-9_.:-]*(?=[\s/>])[^>]*>/gi;
+const ANGLE_PLACEHOLDER_RE = /^<([a-z][a-z0-9_.:-]*)(?:\/[a-z][a-z0-9_.:-]*)?>$/i;
+const HTML_ELEMENT_NAME_RE =
+  /^(?:a|abbr|acronym|address|applet|area|article|aside|audio|b|base|basefont|bdi|bdo|bgsound|big|blink|blockquote|body|br|button|canvas|caption|center|cite|code|col|colgroup|data|datalist|dd|del|details|dfn|dialog|dir|div|dl|dt|em|embed|fieldset|figcaption|figure|font|footer|form|frame|frameset|h[1-6]|head|header|hgroup|hr|html|i|iframe|img|input|ins|isindex|kbd|keygen|label|legend|li|link|listing|main|map|mark|marquee|menu|menuitem|meta|meter|multicol|nav|nextid|nobr|noembed|noframes|noscript|object|ol|optgroup|option|output|p|param|picture|plaintext|pre|progress|q|rb|rp|rt|rtc|ruby|s|samp|script|search|section|select|selectedcontent|slot|small|source|spacer|span|strike|strong|style|sub|summary|sup|table|tbody|td|template|textarea|tfoot|th|thead|time|title|tr|track|tt|u|ul|var|video|wbr|xmp)$/i;
 const MAY_CONTAIN_MARKDOWN_CODE_RE = /[`~]|\t| {4}/;
 const CODE_ESCAPE = "\u0000e";
 const CODE_PLACEHOLDER = "\u0000p";
@@ -20,12 +23,16 @@ const CONVERTIBLE_HTML_OPEN_TAG_RE =
 const EMPTY_HTML_ELEMENT_RE =
   /<((?!(?:br|p|div)(?=[\s>]))[a-z][a-z0-9_.:-]*)(?=[\s>])(?:[^"'<>]|"[^"]*"|'[^']*')*>(?:[^\S\r\n\u2028\u2029]|<(?!\/?(?:br|p|div)(?=[\s/>]))\/?[a-z][a-z0-9_.:-]*(?=[\s/>])(?:[^"'<>]|"[^"]*"|'[^']*')*>)*<\/\1\s*>/gi;
 
-function removeMatchesUntilStable(text: string, pattern: RegExp): string {
+function removeMatchesUntilStable(
+  text: string,
+  pattern: RegExp,
+  replacement?: (match: string) => string,
+): string {
   let previous: string;
   let current = text;
   do {
     previous = current;
-    current = current.replace(pattern, "");
+    current = replacement ? current.replace(pattern, replacement) : current.replace(pattern, "");
   } while (current !== previous);
   return current;
 }
@@ -52,7 +59,17 @@ function convertHtmlOutsideCode(text: string, options: { style?: "markdown" }): 
     .replace(/<h[1-6]>(.*?)<\/h[1-6]>/gi, `\n${boldMarker}$1${boldMarker}\n`)
     .replace(/<li>(.*?)<\/li>/gi, "• $1\n");
 
-  return removeMatchesUntilStable(converted, HTML_TAG_RE).replace(/\n{3,}/g, "\n\n");
+  const closingTagNames = new Set<string>();
+  for (const tag of converted.matchAll(/<\/[a-z][a-z0-9_.:-]*\s*>/gi)) {
+    closingTagNames.add(tag[0].slice(2, -1).trim().toLowerCase());
+  }
+  return removeMatchesUntilStable(converted, HTML_TAG_RE, (tag) => {
+    const name = ANGLE_PLACEHOLDER_RE.exec(tag)?.[1];
+    // Bare unknown names are CLI/generic placeholders; paired names remain markup.
+    return name && !HTML_ELEMENT_NAME_RE.test(name) && !closingTagNames.has(name.toLowerCase())
+      ? tag
+      : "";
+  }).replace(/\n{3,}/g, "\n\n");
 }
 
 /**

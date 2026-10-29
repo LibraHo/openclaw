@@ -95,6 +95,26 @@ describe("Telegram physical send acceptance over HTTP", () => {
     rejections.length = 0;
   });
 
+  it("rejects unresolved local ownership before HTTP and sends after an explicit binding", async () => {
+    const ownerCfg = {
+      ...cfg,
+      agents: { ownership: "explicit" as const, entries: { main: {}, other: {} } },
+      bindings: [] as Array<{ agentId: string; match: { channel: string; accountId: string } }>,
+    };
+    await expect(
+      sendMessageTelegram("123", "Owner control", { cfg: ownerCfg, api: bot.api }),
+    ).rejects.toMatchObject({ name: "PlatformMessageNotDispatchedError", retryable: false });
+    expect(requests).toEqual([]);
+    await sendMessageTelegram("123", "Owner control", {
+      cfg: {
+        ...ownerCfg,
+        bindings: [{ agentId: "main", match: { channel: "telegram", accountId: "default" } }],
+      },
+      api: bot.api,
+    });
+    expect(requests.map(({ method }) => method)).toEqual(["sendMessage"]);
+  });
+
   afterAll(async () => {
     for (const socket of sockets) {
       socket.destroy();

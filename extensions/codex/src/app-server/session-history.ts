@@ -19,6 +19,11 @@ import type {
   SessionTranscriptTargetParams,
 } from "openclaw/plugin-sdk/session-transcript-runtime";
 import { isRecord } from "openclaw/plugin-sdk/string-coerce-runtime";
+import {
+  CodexHistoryRejection,
+  readCodexHistoryRejectionReason,
+  type CodexHistoryRejectionReason,
+} from "./history-rejection.js";
 import { sanitizeCodexHistoryImagePayloads } from "./image-payload-sanitizer.js";
 
 type CodexHistoryView = "native-evidence" | "model-context";
@@ -50,7 +55,26 @@ export async function readCodexMirroredSessionHistory<T>(
   read: (messages: Iterable<AgentMessage>) => T,
   admission?: TranscriptTurnAdmission,
   view: CodexHistoryView = "native-evidence",
+  onRejected?: (reason: CodexHistoryRejectionReason) => void,
 ): Promise<T | undefined> {
+  const readConsumer = (messages: Iterable<AgentMessage>): T => {
+    try {
+      return read(messages);
+    } catch (error) {
+      // A consumer can throw ENOENT too; only an actual missing transcript is empty history.
+      throw new CodexHistoryRejection(readCodexHistoryRejectionReason(error));
+    }
+  };
+  const reject = (error: unknown): undefined => {
+    onRejected?.(
+      !(error instanceof CodexHistoryRejection) &&
+        isRecord(error) &&
+        (error.code === "EACCES" || error.code === "EPERM")
+        ? "history_access_denied"
+        : readCodexHistoryRejectionReason(error),
+    );
+    return undefined;
+  };
   const consume = (
     messages: Iterable<AgentMessage>,
     header: unknown,
@@ -58,15 +82,15 @@ export async function readCodexMirroredSessionHistory<T>(
   ): T | undefined => {
     // Foreign or absent headers are empty history; malformed session headers are read failures.
     if (!isRecord(header) || header.type !== "session") {
-      return read([]);
+      return readConsumer([]);
     }
     if (typeof header.id !== "string") {
-      return undefined;
+      throw new CodexHistoryRejection("malformed_history");
     }
     if (header.id !== target.sessionId) {
-      return read([]);
+      return readConsumer([]);
     }
-    return read(
+    return readConsumer(
       (function* () {
         for (const message of messages) {
           yield sanitizeCodexHistoryImagePayloads(message, imageLabel);
@@ -101,7 +125,7 @@ export async function readCodexMirroredSessionHistory<T>(
         (target.agentId !== undefined && agentId !== target.agentId) ||
         (target.sessionKey !== undefined && sessionKey !== target.sessionKey)
       ) {
-        return read([]);
+        return readConsumer([]);
       }
       return readTarget({ agentId, sessionId, sessionKey, storePath });
     }
@@ -111,11 +135,11 @@ export async function readCodexMirroredSessionHistory<T>(
         sqliteMarker.sessionId !== target.sessionId ||
         (target.agentId !== undefined && sqliteMarker.agentId !== target.agentId)
       ) {
-        return read([]);
+        return readConsumer([]);
       }
       const sessionKey = resolveSqliteMarkerSessionKey(target, sqliteMarker);
       if (!sessionKey) {
-        return read([]);
+        return readConsumer([]);
       }
       return readTarget({
         agentId: sqliteMarker.agentId,
@@ -130,7 +154,7 @@ export async function readCodexMirroredSessionHistory<T>(
         (target.agentId !== undefined && admission.agentId !== target.agentId) ||
         (target.sessionKey !== undefined && admission.sessionKey !== target.sessionKey)
       ) {
-        return read([]);
+        return readConsumer([]);
       }
       return readTarget({
         agentId: admission.agentId,
@@ -153,10 +177,14 @@ export async function readCodexMirroredSessionHistory<T>(
     );
   } catch (error) {
     // A new session can be read before its transcript exists; other failures still warn.
-    if (isRecord(error) && error.code === "ENOENT") {
-      return read([]);
+    if (!(error instanceof CodexHistoryRejection) && isRecord(error) && error.code === "ENOENT") {
+      try {
+        return readConsumer([]);
+      } catch (consumerError) {
+        return reject(consumerError);
+      }
     }
-    return undefined;
+    return reject(error);
   }
 }
 

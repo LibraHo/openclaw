@@ -1198,6 +1198,7 @@ describe("buildOpenAIProvider", () => {
     expect(provider.models.map((model) => model.id)).not.toContain("gpt-5.6-terra");
     expect(provider.models.map((model) => model.id)).not.toContain("gpt-5.6-luna");
     expect(provider.models.map((model) => model.id)).not.toContain("gpt-6-astra");
+    expect(provider.models.map((model) => model.id)).not.toContain("gpt-6.1-terra");
     expect(provider.models.map((model) => model.id)).toContain("gpt-5.5");
     expect(release).toHaveBeenCalledOnce();
   });

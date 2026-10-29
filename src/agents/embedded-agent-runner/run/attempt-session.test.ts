@@ -222,6 +222,24 @@ beforeEach(() => {
 });
 
 describe("prepareEmbeddedAttemptAgentSession", () => {
+  it.each([
+    ["settled-tool-finalization", true],
+    [undefined, false],
+  ] as const)(
+    "keeps the compaction guard across reload for operation %s",
+    async (operation, expected) => {
+      const fixture = createInput();
+      fixture.input.attempt = { ...fixture.input.attempt, operation };
+
+      await prepareEmbeddedAttemptAgentSession(fixture.input);
+
+      expect(hoisted.applyAgentAutoCompactionGuard).toHaveBeenCalledTimes(2);
+      expect(
+        hoisted.applyAgentAutoCompactionGuard.mock.calls.map(([args]) => args.compactionForbidden),
+      ).toEqual([expected, expected]);
+    },
+  );
+
   it("cancels a hydrated directory tool's approval with its captured permission generation", async () => {
     const fixture = createInput();
     const generation = new AbortController();

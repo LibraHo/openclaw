@@ -162,7 +162,7 @@ describe("runEmbeddedAgent prompt timeout fallback handoff", () => {
       disableTools: true,
       skipPreparedUserTurnMessage: true,
       prompt:
-        "The previous assistant turn completed its tool calls but did not produce a user-visible answer. Continue from the current transcript and produce the final user-visible answer now. Do not repeat completed tool calls or restart from scratch.",
+        "The previous assistant turn completed its tool calls but did not produce a user-visible answer. Continue from the current transcript and produce the final user-visible answer now. Do not repeat completed tool calls or restart from scratch. Do not call tools in this step. Summarize the recorded results in plain text.",
     });
     expect(mockedGetApiKeyForModel).toHaveBeenCalledTimes(1);
   });

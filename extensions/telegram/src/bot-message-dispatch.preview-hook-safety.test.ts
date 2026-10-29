@@ -44,17 +44,20 @@ describeTelegramDispatch("Telegram provider preview hook safety", () => {
     },
   );
 
-  it("allows verbose progress when progress rendering is enabled", async () => {
-    await dispatchWithContext({
-      context: createContext(),
-      streamMode: "progress",
-      telegramCfg: { streaming: { progress: { toolProgress: true } } },
-    });
+  it.each([undefined, true])(
+    "allows explicitly requested verbose progress with toolProgress=%s",
+    async (toolProgress) => {
+      await dispatchWithContext({
+        context: createContext(),
+        streamMode: "progress",
+        telegramCfg: { streaming: { progress: { toolProgress } } },
+      });
 
-    expectDispatchParams({
-      replyOptions: expect.objectContaining({ suppressToolProgressMessages: false }),
-    });
-  });
+      expectDispatchParams({
+        replyOptions: expect.objectContaining({ suppressToolProgressMessages: false }),
+      });
+    },
+  );
 
   it("preserves answer previews when no hooks are registered", async () => {
     await dispatchWithContext({ context: createContext() });

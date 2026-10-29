@@ -104,6 +104,8 @@ export async function prepareEmbeddedAttemptAgentSession(input: {
   });
   const autoCompactionGuardArgs = {
     settingsManager,
+    // The finalizer's result gate rejects compaction; keep both preparation passes guarded.
+    compactionForbidden: attempt.operation === "settled-tool-finalization",
     contextEngineInfo: input.activeContextEngineInfo,
     compactionMode: resolveEffectiveCompactionMode(attempt.config),
     silentOverflowProneProvider: isSilentOverflowProneModel({

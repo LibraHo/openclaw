@@ -9,6 +9,10 @@ import {
 } from "openclaw/plugin-sdk/plugin-state-test-runtime";
 import { finalizeInboundContext, resetInboundDedupe } from "openclaw/plugin-sdk/reply-runtime";
 import type { GetReplyOptions, MsgContext } from "openclaw/plugin-sdk/reply-runtime";
+import {
+  closeOpenClawAgentDatabasesForTest,
+  closeOpenClawStateDatabaseForTest,
+} from "openclaw/plugin-sdk/sqlite-runtime-testing";
 import { afterEach, beforeEach, vi, type Mock } from "vitest";
 import type { TelegramBotDeps } from "./bot-deps.js";
 import { runTelegramChannelInboundEventWithHarness } from "./bot.test-helpers.js";
@@ -89,6 +93,8 @@ function cleanupMediaHarnessStoreRoot(): void {
   if (!mediaHarnessStoreRoot) {
     return;
   }
+  closeOpenClawAgentDatabasesForTest();
+  closeOpenClawStateDatabaseForTest();
   rmSync(mediaHarnessStoreRoot, { recursive: true, force: true });
   mediaHarnessStoreRoot = undefined;
 }

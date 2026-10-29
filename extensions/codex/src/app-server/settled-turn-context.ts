@@ -1,8 +1,5 @@
-import {
-  embeddedAgentLog,
-  formatErrorMessage,
-  type AgentMessage,
-} from "openclaw/plugin-sdk/agent-harness-runtime";
+import { embeddedAgentLog, type AgentMessage } from "openclaw/plugin-sdk/agent-harness-runtime";
+import { CodexHistoryRejection, readCodexHistoryRejectionReason } from "./history-rejection.js";
 import type { JsonValue } from "./protocol.js";
 import {
   readCodexMirroredSessionHistory,
@@ -47,7 +44,10 @@ type SettledTurnMessages = {
 };
 
 function rejectEvidence(): never {
-  throw new Error("Codex settled-turn transcript does not match the settled turn");
+  throw new CodexHistoryRejection(
+    "provenance_rejected",
+    "Codex settled-turn transcript does not match the settled turn",
+  );
 }
 
 function adoptPersistedHostPrompt(message: AgentMessage, source: AgentMessage): AgentMessage {
@@ -175,11 +175,19 @@ export async function captureCodexSettledTurnFinalizationContext(
         new CodexSettledTurnContext(
           projectSettledCodexMessages(verifiedSettledMessages(messages, params)),
         ),
+      undefined,
+      "native-evidence",
+      (reason) => {
+        embeddedAgentLog.warn("codex settled-turn finalization context capture failed", {
+          reason,
+          turnId: params.turnId,
+        });
+      },
     );
   } catch (error) {
     // Capture follows settled side effects; any failure must preserve the incomplete-turn result.
     embeddedAgentLog.warn("codex settled-turn finalization context capture failed", {
-      error: formatErrorMessage(error),
+      reason: readCodexHistoryRejectionReason(error),
       turnId: params.turnId,
     });
     return undefined;

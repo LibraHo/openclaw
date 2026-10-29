@@ -23,14 +23,6 @@ export function buildCodexMessagesSnapshot(params: {
   createAssistantMirrorMessage: (title: string, text: string) => AssistantMessage;
 }): AgentMessage[] {
   const messages = promptSnapshot(params.runParams, params.turnId, params.upstreamUserText);
-  if (params.reasoningText) {
-    messages.push(
-      attachCodexMirrorIdentity(
-        params.createAssistantMirrorMessage("Codex reasoning", params.reasoningText),
-        `${params.turnId}:reasoning`,
-      ),
-    );
-  }
   const commentaryMessages =
     params.runParams.config?.ui?.prefs?.chatPersistCommentary === false
       ? []
@@ -52,6 +44,14 @@ export function buildCodexMessagesSnapshot(params: {
       (asDateTimestampMs(left.timestamp) ?? 0) - (asDateTimestampMs(right.timestamp) ?? 0),
   );
   messages.push(...visibleWorkMessages);
+  if (params.reasoningText) {
+    messages.push(
+      attachCodexMirrorIdentity(
+        params.createAssistantMirrorMessage("Codex reasoning", params.reasoningText),
+        `${params.turnId}:reasoning`,
+      ),
+    );
+  }
   if (params.lastAssistant) {
     messages.push(attachCodexMirrorIdentity(params.lastAssistant, `${params.turnId}:assistant`));
   }

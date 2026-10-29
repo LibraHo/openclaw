@@ -4,6 +4,7 @@ import type { ExecutionIdentityAdmissionToken } from "../../audit/execution-iden
 import type { ReplyPayload } from "../../auto-reply/reply-payload.js";
 import type { FinalizedMsgContext } from "../../auto-reply/templating.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
+import { isProvenDeliveryNotSentError } from "../../infra/delivery-recovery.shared.js";
 import { normalizeDeliverableOutboundChannel } from "../../infra/outbound/channel-resolution.js";
 import {
   type DeliverOutboundPayloadsParams,
@@ -67,7 +68,7 @@ type DurableInboundReplyDeliveryResult =
     }
   | { status: "handled_visible"; delivery: ChannelDeliveryResult }
   | { status: "handled_no_send"; reason: "no_visible_result"; delivery: ChannelDeliveryResult }
-  | { status: "failed"; error: unknown; sentBeforeError?: true };
+  | { status: "failed"; error: unknown; sentBeforeError?: boolean };
 
 function resolveDeliveryTarget(params: DurableInboundReplyDeliveryParams): string | undefined {
   return (
@@ -245,7 +246,14 @@ export async function deliverInboundReplyWithMessageSendContextCore(
     gatewayClientScopes: params.ctxPayload.GatewayClientScopes ?? [],
   });
   if (send.status === "failed") {
-    return { status: "failed" as const, error: send.error };
+    return {
+      status: "failed" as const,
+      error: send.error,
+      ...(!durableMessageBatchMayHaveReachedRecipient(send) &&
+      isProvenDeliveryNotSentError(send.error)
+        ? { sentBeforeError: false }
+        : {}),
+    };
   }
   if (send.status === "partial_failed") {
     const content = resolveAcceptedVisibleContent(send.results);

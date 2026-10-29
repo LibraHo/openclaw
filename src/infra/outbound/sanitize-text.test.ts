@@ -253,8 +253,29 @@ describe("sanitizeForPlainText", () => {
     );
   });
 
-  it("still strips tags whose name ends at a tag boundary", () => {
-    expect(sanitizeForPlainText("Ping <users/abc> for access")).toBe("Ping  for access");
+  it("preserves slash-qualified placeholders", () => {
+    expect(sanitizeForPlainText("Ping <users/abc> for access")).toBe("Ping <users/abc> for access");
+  });
+
+  it.each([
+    "Run git checkout <branch-name> then npm install <package>.",
+    "Generic List<String> and Map<K, V>.",
+    "/model <provider/model> (change with /think <level>)",
+    "a < b > c and x<5",
+  ])("preserves angle-bracket prose: %s", (text) => {
+    expect(sanitizeForPlainText(text)).toBe(text);
+  });
+
+  it("keeps stripping real HTML and paired unknown tags beside placeholders", () => {
+    expect(
+      sanitizeForPlainText(
+        "<script>alert(1)</script><br><b>x</b> <branch-name> <vendor:note>one</vendor:note>",
+      ),
+    ).toBe("alert(1)\n*x* <branch-name> one");
+    expect(sanitizeForPlainText("<img><iframe><style><strike><font><center>")).toBe("");
+    expect(sanitizeForPlainText("<branch-name>paired</branch-name> then <package>")).toBe(
+      "paired then <package>",
+    );
   });
 
   // --- passthrough --------------------------------------------------------

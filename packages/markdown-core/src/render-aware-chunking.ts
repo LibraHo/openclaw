@@ -162,17 +162,70 @@ function findLargestChunkTextLengthWithinRenderedLimit<TRendered>(
     return currentTextLength;
   }
 
-  // Rendered length is not guaranteed to be monotonic after escaping/link or
-  // file-reference rewriting, so test exact candidates from longest to shortest.
-  for (let candidateLength = currentTextLength - 1; candidateLength >= 1; candidateLength -= 1) {
-    const safeCandidateLength = avoidTrailingHighSurrogateBreak(chunk.text, 0, candidateLength);
-    const candidate = sliceMarkdownIR(chunk, 0, safeCandidateLength);
-    const rendered = options.renderChunk(candidate);
-    if (options.measureRendered(rendered) <= renderedLimit) {
-      return safeCandidateLength;
+  const fitsAt = (length: number) =>
+    options.measureRendered(options.renderChunk(sliceMarkdownIR(chunk, 0, length))) <=
+    renderedLimit;
+  // Rewrites can shrink a completed token, so bisect only at token starts.
+  // Keep the exact descending search inside the first overflowing token.
+  const starts = findTokenStarts(chunk.text);
+  let fitting = -1;
+  let overflowing = starts.length;
+  let fittingLength = 0;
+  while (overflowing - fitting > 1) {
+    const index = fitting + Math.floor((overflowing - fitting) / 2);
+    const length = avoidTrailingHighSurrogateBreak(
+      chunk.text,
+      0,
+      starts[index] ?? currentTextLength,
+    );
+    if (fitsAt(length)) {
+      fitting = index;
+      fittingLength = length;
+    } else {
+      overflowing = index;
     }
   }
-  return 0;
+  const upperLength = starts[overflowing] ?? currentTextLength;
+  for (let candidateLength = upperLength - 1; candidateLength >= 1; candidateLength -= 1) {
+    const safeCandidateLength = avoidTrailingHighSurrogateBreak(chunk.text, 0, candidateLength);
+    if (safeCandidateLength <= fittingLength) {
+      break;
+    }
+    if (fitsAt(safeCandidateLength)) {
+      return safeCandidateLength;
+    }
+    candidateLength = Math.min(candidateLength, safeCandidateLength);
+  }
+  return fittingLength;
+}
+
+function findTokenStarts(text: string): number[] {
+  const starts: number[] = [];
+  let angleStart = -1;
+  let angleStartsLength = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    if (index > 0 && /\s/.test(text[index - 1] ?? "")) {
+      starts.push(index);
+    }
+    // Slack preserves complete angle tokens, including labels containing spaces.
+    // Collect tentatively so unmatched angles need no rescanning or quadratic regex.
+    if (angleStart >= 0) {
+      if (text[index] === "\n") {
+        angleStart = -1;
+      } else if (text[index] === ">") {
+        starts.length = angleStartsLength;
+        angleStart = -1;
+      }
+    } else if (
+      text[index] === "<" &&
+      index + 1 < text.length &&
+      !/[\s>]/.test(text[index + 1] ?? "")
+    ) {
+      angleStart = index;
+      angleStartsLength = starts.length;
+    }
+  }
+  return starts;
 }
 
 function findMarkdownIRPreservedSplitIndex(text: string, start: number, limit: number): number {

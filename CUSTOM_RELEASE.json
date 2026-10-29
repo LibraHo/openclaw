@@ -1,18 +1,22 @@
 {
-  "customRelease": "2026.8.35-D",
+  "customRelease": "2026.8.35-E",
   "upstreamVersion": "2026.8.35",
   "upstreamCommit": "713ba5785d72d6ed1cec971e21307f16cc4234a6",
-  "previousRelease": "2026.8.35-C",
-  "previousSourceCommit": "06aadf04949b9aaa0d2665c952124df700ccc191",
-  "deployment": "candidate build only; running production remains 2026.8.35-C",
+  "previousRelease": "2026.8.35-D",
+  "previousSourceCommit": "7fdcb8a1f5b9cec7c1e9d66bc8ae551a38f0ed70",
+  "deployment": "candidate build only; production remains 2026.8.35-C",
   "addedOfficialPRs": [
-    140388,
-    156842,
-    168738,
-    169010,
-    165444,
-    164633,
-    169029
+    160433,
+    185310,
+    139933,
+    185351,
+    165179,
+    167470,
+    167953,
+    166493,
+    168011,
+    169202,
+    171564
   ],
   "officialSourceCommits": {
     "168400": "4fcac11846800494f7b25f795d039be1ed505a62",
@@ -25,7 +29,21 @@
     "165444": "4995bef8fdcfa2c5776194d2a0c095a99e46ef29",
     "164633": "d2dec0c9cfcd4979d6916646090d4a60b434ed0d",
     "140388": "cb1b3be8fb9821adddb30a9983e552ae9989c19f",
-    "168738": "756b2650a8544f5c0b852a00024e58e54c40eb46"
+    "168738": "756b2650a8544f5c0b852a00024e58e54c40eb46",
+    "160433": [
+      "b5f9bcdcade7475a5b3e279e95c8cfcb5e7fe142",
+      "d121bfc4d9718e3cbc38a916ed89eb1bc64c3c25"
+    ],
+    "185310": "40b1f0175ef3350140d31299406cfbfe4e2f718c",
+    "139933": "13cb0bafd53c8bbd4f691792ce677302bb61cee2",
+    "185351": "9b6922809f475894be6bede11f7626ac93beeaf4",
+    "165179": "3913c8bfc980a8ac098398798d7204ff4cce0bb0",
+    "167470": "6c3a7799dc623ac1e39a4f1256d51aabd59257dd",
+    "167953": "29ea5b9a5c09c012a7bfaee99783df9eaa10763f",
+    "166493": "89f01e70f715849e861cee801644b494c6857664",
+    "168011": "76b6975b0dca15538bd580631882ecc94a35292a",
+    "169202": "6d624f3af2a1dbcdcbbc81c235846df6ccb6a29d",
+    "171564": "2e084ea7cb6232dfb893cf02b9b4ee2df10d1394"
   },
   "preservedOfficialPRs": [
     168400,
@@ -43,10 +61,54 @@
     135083,
     135973,
     135925,
-    135849
+    135849,
+    140388,
+    156842,
+    168738,
+    169010,
+    165444,
+    164633,
+    169029
   ],
   "interfaceBase": "unchanged 2026.8.35",
   "dependencyChanges": false,
   "databaseSchemaVersionChanges": false,
-  "memoryReset": "Explicit operator command clears derived indexes only; not run during build or deployment"
+  "memoryReset": "Explicit operator command clears derived indexes only; not run during build or deployment",
+  "addedModelSupport": {
+    "id": "openai/gpt-6.1-terra",
+    "source": "https://developers.openai.com/api/docs/models/gpt-6.1-terra",
+    "defaultModelsChanged": false,
+    "subscriptionAvailability": "requires account-scoped discovery and live authenticated inference; static support does not grant account access"
+  },
+  "deferredOfficialPRs": {
+    "167756": "new per-instance memory lifecycle absent; do not change lazy NAS indexing",
+    "177716": "new exact thread owner/deferred cleanup architecture absent",
+    "174530": "new cron history worker/kernel absent",
+    "169529": "official report attributes regression to newer 10.5 admission architecture",
+    "173366": "new model publication queue/startup owner absent",
+    "171573": "requires per-stream sanitizer owner and code-region semantics absent; tracked as older-version follow-up",
+    "167567": "new keptAnswer producer owner absent; not a one-line repair on8.35",
+    "176422": "41-file authority/scheduler feature, not a compatible small backport"
+  },
+  "runtime": {
+    "node": "24.15.0",
+    "nodeUpgrade": false,
+    "localTestRunner": "24.22.1; tests only, not target runtime"
+  },
+  "compatibilitySlices": {
+    "168016": "Already present; retain and verify explicitly requested verbose diagnostics",
+    "171564": "Only ETIMEDOUT with proven connect/getaddrinfo stage and all aggregate branches; existing DNS defaults and explicit network settings unchanged",
+    "167470": "Authoritative pre-dispatch rejection and sentBeforeError=false propagation; no newer preview lifecycle imported",
+    "139933": "Allowlisted diagnostic causes on existing synchronous history reader, no newer worker architecture"
+  },
+  "modelLiveProof": {
+    "client": "0.162.0",
+    "runtime": "24.15.0",
+    "authenticatedDiscovery": true,
+    "selectedModel": "gpt-6.1-terra",
+    "turnStatus": "completed",
+    "response": "TERRA_CONNECTION_OK",
+    "authPath": "canonical applyCodexAppServerAuthProfile + isolated native CODEX_HOME",
+    "operatorDefaultsChanged": false
+  }
 }

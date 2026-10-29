@@ -1,11 +1,30 @@
 import { MediaFetchError } from "openclaw/plugin-sdk/media-runtime";
 import { describe, expect, it } from "vitest";
 import {
+  hasInboundMedia,
+  resolveInboundMediaFileId,
   isDurablyRetryableInboundMediaError,
   isMediaSizeLimitError,
   isRecoverableMediaGroupError,
   TelegramBotApiFileTooLargeError,
 } from "./bot-handlers.media.js";
+
+describe("animation ingress", () => {
+  it("admits animation-only updates and selects animation over its companion document", () => {
+    const animation = {
+      file_id: "gif",
+      file_unique_id: "gif-unique",
+      width: 10,
+      height: 10,
+      duration: 1,
+    };
+    for (const document of [undefined, { file_id: "document", file_unique_id: "doc-unique" }]) {
+      const message = { animation, document } as import("grammy/types").Message;
+      expect(hasInboundMedia(message)).toBe(true);
+      expect(resolveInboundMediaFileId(message)).toBe("gif");
+    }
+  });
+});
 
 describe("isMediaSizeLimitError", () => {
   it.each([

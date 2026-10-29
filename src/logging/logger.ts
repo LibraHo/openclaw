@@ -33,7 +33,7 @@ import {
   resolveDefaultRollingLogFile,
 } from "./log-file-path.js";
 import { canUseNodeFs, formatLocalDate, LOG_PREFIX, LOG_SUFFIX } from "./log-file-shared.js";
-import { fileLogTransport } from "./logger-file-transport.js";
+import { ensureLogDirectorySync, fileLogTransport } from "./logger-file-transport.js";
 import { defaultLoggerHostnameResolver, loggerHostnameState } from "./logger-hostname-state.js";
 import { setLoggerFileTargetResolver } from "./logger-settings-internal.js";
 import { redactSecrets, redactSensitiveText } from "./redact.js";
@@ -609,7 +609,7 @@ function buildLogger(settings: ResolvedRuntimeSettings): TsLogger<LogObj> {
 
   const rollingFile = settings.rolling;
   let activeFile = resolveActiveLogFileWithMode(settings.file, rollingFile);
-  fs.mkdirSync(path.dirname(activeFile), { recursive: true });
+  ensureLogDirectorySync(path.dirname(activeFile));
   // Clean up stale rolling logs when using a dated log filename.
   if (rollingFile) {
     pruneOldRollingLogs(path.dirname(activeFile));
@@ -619,9 +619,13 @@ function buildLogger(settings: ResolvedRuntimeSettings): TsLogger<LogObj> {
       const nextActiveFile = resolveActiveLogFileWithMode(settings.file, rollingFile);
       if (nextActiveFile !== activeFile) {
         activeFile = nextActiveFile;
-        fs.mkdirSync(path.dirname(activeFile), { recursive: true });
-        if (rollingFile) {
-          pruneOldRollingLogs(path.dirname(activeFile));
+        try {
+          ensureLogDirectorySync(path.dirname(activeFile));
+          if (rollingFile) {
+            pruneOldRollingLogs(path.dirname(activeFile));
+          }
+        } catch {
+          // Enqueue this first failed record too, so the transport reports its loss.
         }
       }
       const time = formatTimestamp(logObj.date ?? new Date(), { style: "long" });

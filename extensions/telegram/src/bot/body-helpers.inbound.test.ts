@@ -1,12 +1,31 @@
 import type { Message, MessageEntity } from "grammy/types";
 import { markdownToIR } from "openclaw/plugin-sdk/text-chunking";
 import { describe, expect, it } from "vitest";
-import { getTelegramTextParts, joinTelegramTextParts } from "./body-helpers.js";
+import {
+  getTelegramTextParts,
+  joinTelegramTextParts,
+  resolveTelegramPrimaryMedia,
+} from "./body-helpers.js";
 import { renderTelegramTextEntities } from "./inbound-text-entities.js";
 
 function asTelegramMessage(message: unknown): Message {
   return message as Message;
 }
+
+describe("animation primary media", () => {
+  it("classifies GIF animation as video ahead of the document companion", () => {
+    const animation = {
+      file_id: "gif",
+      file_unique_id: "gif-unique",
+      width: 10,
+      height: 10,
+      duration: 1,
+    };
+    expect(
+      resolveTelegramPrimaryMedia(asTelegramMessage({ animation, document: { file_id: "doc" } })),
+    ).toEqual({ kind: "video", fileRef: animation });
+  });
+});
 
 describe("getTelegramTextParts", () => {
   it("projects native Telegram polls into bounded, accurate inbound text", () => {

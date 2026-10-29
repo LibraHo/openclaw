@@ -233,10 +233,67 @@ describe("telegram stickers", () => {
 });
 
 describe("telegram local Bot API media", () => {
+  it.each([false, true])(
+    "downloads animation once with companion document=%s",
+    async (withDocument) => {
+      const proxyFetch = vi.fn().mockResolvedValue(
+        new Response(Buffer.from("animation"), {
+          status: 200,
+          headers: { "content-type": "video/mp4" },
+        }),
+      );
+      const getFile = vi.fn(async () => ({ file_path: "animations/clip.mp4" }));
+      const media = await resolveMedia({
+        maxBytes: 1024,
+        token: "tok",
+        transport: {
+          close: async () => {},
+          fetch: proxyFetch as typeof fetch,
+          sourceFetch: proxyFetch as typeof fetch,
+        },
+        ctx: {
+          message: {
+            message_id: 105,
+            date: 1736380800,
+            chat: { id: 1234, type: "private" },
+            animation: {
+              file_id: "animation",
+              file_unique_id: "gif-unique",
+              width: 10,
+              height: 10,
+              duration: 1,
+              file_name: "clip.mp4",
+              mime_type: "video/mp4",
+            },
+            ...(withDocument
+              ? {
+                  document: {
+                    file_id: "doc",
+                    file_unique_id: "doc-unique",
+                    file_name: "wrong.bin",
+                    mime_type: "application/octet-stream",
+                  },
+                }
+              : {}),
+          },
+          getFile,
+        } as unknown as TelegramContext,
+      });
+      expect(getFile).toHaveBeenCalledTimes(1);
+      expect(proxyFetch).toHaveBeenCalledTimes(1);
+      expect(media).toMatchObject({
+        kind: "video",
+        fileName: "clip.mp4",
+        contentType: "video/mp4",
+      });
+    },
+  );
+
   it("reads a container-local file from its trusted host volume mount", async () => {
     const token = "123:test-token";
     const tempRoot = await realpath(await mkdtemp(path.join(os.tmpdir(), "openclaw-tg-local-")));
-    const relativePath = path.join(token, "documents", "file_12.zip");
+    const tokenDirectory = token.replaceAll(":", "~");
+    const relativePath = path.join(tokenDirectory, "documents", "file_12.zip");
     try {
       await mkdir(path.dirname(path.join(tempRoot, relativePath)), { recursive: true });
       await writeFile(path.join(tempRoot, relativePath), "zip-data");
@@ -259,7 +316,7 @@ describe("telegram local Bot API media", () => {
             date: 1736380800,
           },
           getFile: async () => ({
-            file_path: `/var/lib/telegram-bot-api/${token}/documents/file_12.zip`,
+            file_path: `/var/lib/telegram-bot-api/${tokenDirectory}/documents/file_12.zip`,
           }),
         } as TelegramContext,
       });

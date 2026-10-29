@@ -35,7 +35,7 @@ type BeginUpdateResult =
     }
   | {
       accepted: false;
-      reason: "accepted-watermark" | "semantic-dedupe";
+      reason: "accepted-watermark" | "semantic-dedupe" | "pending";
     };
 
 type FinishUpdateOptions = {
@@ -224,9 +224,12 @@ export function createTelegramUpdateTracker(options: TelegramUpdateTrackerOption
         skip(`update:${updateId}`);
         return { accepted: false, reason: "accepted-watermark" };
       } else if (acceptedUpdateIds.has(updateId)) {
-        // Same process already accepted this exact id (completed or in-flight).
+        // A still-running exact-id attempt is not terminal evidence for spool replay.
         skip(`update:${updateId}`);
-        return { accepted: false, reason: "accepted-watermark" };
+        return {
+          accepted: false,
+          reason: pendingUpdateIds.has(updateId) ? "pending" : "accepted-watermark",
+        };
       }
     }
     if (updateKey) {

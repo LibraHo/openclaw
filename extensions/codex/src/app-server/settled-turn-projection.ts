@@ -1,6 +1,7 @@
 import { Buffer } from "node:buffer";
 import type { AgentMessage } from "openclaw/plugin-sdk/agent-harness-runtime";
 import { isRecord, normalizeOptionalString } from "openclaw/plugin-sdk/string-coerce-runtime";
+import { CodexHistoryRejection, type CodexHistoryRejectionReason } from "./history-rejection.js";
 import type { JsonValue } from "./protocol.js";
 import { readUpstreamUserText } from "./upstream-prompt-provenance.js";
 
@@ -22,6 +23,10 @@ type ProjectedResponseItem = {
   result?: ProjectedToolReference;
 };
 
+function rejectProjection(reason: CodexHistoryRejectionReason, detail: string): never {
+  throw new CodexHistoryRejection(reason, `Codex settled-turn projection ${detail}`);
+}
+
 function readBoundedText(
   value: unknown,
   label: string,
@@ -31,7 +36,7 @@ function readBoundedText(
     return undefined;
   }
   if (Buffer.byteLength(value, "utf8") > maxBytes) {
-    throw new Error(`Codex settled-turn projection found oversized ${label}`);
+    rejectProjection("field_limit", `found oversized ${label}`);
   }
   return value;
 }
@@ -39,7 +44,7 @@ function readBoundedText(
 function requireBoundedText(value: unknown, label: string, maxBytes = MAX_TEXT_BYTES): string {
   const text = readBoundedText(value, label, maxBytes);
   if (!text) {
-    throw new Error(`Codex settled-turn projection found empty ${label}`);
+    rejectProjection("unsupported_content", `found empty ${label}`);
   }
   return text;
 }
@@ -51,7 +56,7 @@ function responseItemBytes(item: JsonValue): number {
 function requireCallId(value: unknown): string {
   const callId = normalizeOptionalString(value);
   if (!callId || callId.length > 256) {
-    throw new Error("Codex settled-turn projection found an invalid tool call id");
+    rejectProjection("tool_pairing_rejected", "found an invalid tool call id");
   }
   return callId;
 }
@@ -59,8 +64,9 @@ function requireCallId(value: unknown): string {
 function requireToolName(value: unknown): string {
   const name = normalizeOptionalString(value);
   if (!name || !TOOL_NAME_PATTERN.test(name)) {
-    throw new Error(
-      `Codex settled-turn projection found an invalid tool name${name ? `: ${name.slice(0, 64)}` : ""}`,
+    rejectProjection(
+      "tool_pairing_rejected",
+      `found an invalid tool name${name ? `: ${name.slice(0, 64)}` : ""}`,
     );
   }
   return name;
@@ -72,21 +78,21 @@ function serializeToolArguments(value: unknown): string {
     try {
       parsed = JSON.parse(value);
     } catch {
-      throw new Error("Codex settled-turn projection found invalid JSON tool arguments");
+      rejectProjection("tool_pairing_rejected", "found invalid JSON tool arguments");
     }
     if (!isRecord(parsed)) {
-      throw new Error("Codex settled-turn projection requires object tool arguments");
+      rejectProjection("tool_pairing_rejected", "requires object tool arguments");
     }
     return requireBoundedText(value, "tool arguments");
   }
   if (!isRecord(value)) {
-    throw new Error("Codex settled-turn projection requires object tool arguments");
+    rejectProjection("tool_pairing_rejected", "requires object tool arguments");
   }
   let serialized: string;
   try {
     serialized = JSON.stringify(value);
   } catch {
-    throw new Error("Codex settled-turn projection found unserializable tool arguments");
+    rejectProjection("tool_pairing_rejected", "found unserializable tool arguments");
   }
   return requireBoundedText(serialized, "tool arguments");
 }
@@ -100,29 +106,29 @@ function projectUserMessage(message: Extract<AgentMessage, { role: "user" }>): J
     return { type: "message", role: "user", content: [{ type: "input_text", text }] };
   }
   if (!Array.isArray(message.content)) {
-    throw new Error("Codex settled-turn projection found unsupported user content");
+    rejectProjection("unsupported_content", "found unsupported user content");
   }
   const content: JsonValue[] = [];
   let bytes = responseItemBytes({ type: "message", role: "user", content });
   for (const value of message.content) {
     if (!isRecord(value)) {
-      throw new Error("Codex settled-turn projection found malformed user content");
+      rejectProjection("unsupported_content", "found malformed user content");
     }
     if (value.type !== "text") {
-      throw new Error(`Codex settled-turn projection does not support user content ${value.type}`);
+      rejectProjection("unsupported_content", `does not support user content ${value.type}`);
     }
     const text = readBoundedText(value.text, "user text");
     if (text) {
       const part = { type: "input_text", text };
       bytes += responseItemBytes(part) + (content.length > 0 ? 1 : 0);
       if (bytes > MAX_PROJECTION_BYTES) {
-        throw new Error("Codex settled-turn projection exceeds the byte limit");
+        rejectProjection("projection_limit", "exceeds the byte limit");
       }
       content.push(part);
     }
   }
   if (content.length === 0) {
-    throw new Error("Codex settled-turn projection found an empty user message");
+    rejectProjection("unsupported_content", "found an empty user message");
   }
   return { type: "message", role: "user", content };
 }
@@ -135,11 +141,11 @@ function* projectAssistantMessage(
       ? [{ type: "text", text: message.content }]
       : message.content;
   if (!Array.isArray(values)) {
-    throw new Error("Codex settled-turn projection found unsupported assistant content");
+    rejectProjection("unsupported_content", "found unsupported assistant content");
   }
   for (const value of values) {
     if (!isRecord(value)) {
-      throw new Error("Codex settled-turn projection found malformed assistant content");
+      rejectProjection("unsupported_content", "found malformed assistant content");
     }
     if (value.type === "text") {
       const text = readBoundedText(value.text, "assistant text");
@@ -168,8 +174,9 @@ function* projectAssistantMessage(
       // Private/non-visible reasoning is deliberately outside the application transcript.
       continue;
     }
-    throw new Error(
-      `Codex settled-turn projection does not support assistant content ${String(value.type)}`,
+    rejectProjection(
+      "unsupported_content",
+      `does not support assistant content ${String(value.type)}`,
     );
   }
 }
@@ -181,11 +188,11 @@ function projectToolResult(message: Extract<AgentMessage, { role: "toolResult" }
   const id = requireCallId(message.toolCallId);
   const name = requireToolName(message.toolName);
   if (!Array.isArray(message.content)) {
-    throw new Error("Codex settled-turn projection found unsupported tool result content");
+    rejectProjection("unsupported_content", "found unsupported tool result content");
   }
   const isErrorValue: unknown = message.isError;
   if (isErrorValue !== undefined && typeof isErrorValue !== "boolean") {
-    throw new Error("Codex settled-turn projection found invalid tool result status");
+    rejectProjection("unsupported_content", "found invalid tool result status");
   }
   const isError = isErrorValue === true;
   const parts: string[] = [];
@@ -193,13 +200,13 @@ function projectToolResult(message: Extract<AgentMessage, { role: "toolResult" }
   const appendText = (text: string) => {
     bytes += Buffer.byteLength(text, "utf8") + (parts.length > 0 ? 1 : 0);
     if (bytes > MAX_TEXT_BYTES) {
-      throw new Error("Codex settled-turn projection found oversized tool result output");
+      rejectProjection("field_limit", "found oversized tool result output");
     }
     parts.push(text);
   };
   for (const value of message.content) {
     if (!isRecord(value)) {
-      throw new Error("Codex settled-turn projection found malformed tool result content");
+      rejectProjection("unsupported_content", "found malformed tool result content");
     }
     if (value.type === "image") {
       const mimeType = normalizeOptionalString(value.mimeType) ?? "unknown type";
@@ -209,7 +216,7 @@ function projectToolResult(message: Extract<AgentMessage, { role: "toolResult" }
       continue;
     }
     if (value.type !== "text" && value.type !== "toolResult") {
-      throw new Error("Codex settled-turn projection found malformed tool result content");
+      rejectProjection("unsupported_content", "found malformed tool result content");
     }
     const text =
       value.type === "text"
@@ -243,7 +250,7 @@ function* projectMessage(message: AgentMessage): Generator<ProjectedResponseItem
   } else if (message.role === "toolResult") {
     yield projectToolResult(message);
   } else {
-    throw new Error(`Codex settled-turn projection does not support role ${message.role}`);
+    rejectProjection("unsupported_content", `does not support role ${message.role}`);
   }
 }
 
@@ -257,31 +264,31 @@ export function projectSettledCodexMessages(messages: Iterable<AgentMessage>): J
     for (const { item, call, result } of projectMessage(message)) {
       if (call) {
         if (calls.has(call.id)) {
-          throw new Error("Codex settled-turn projection found a duplicate tool call");
+          rejectProjection("tool_pairing_rejected", "found a duplicate tool call");
         }
         calls.set(call.id, call.name);
       }
       if (result) {
         if (calls.get(result.id) !== result.name || results.has(result.id)) {
-          throw new Error("Codex settled-turn projection found an ambiguous tool transcript");
+          rejectProjection("tool_pairing_rejected", "found an ambiguous tool transcript");
         }
         results.add(result.id);
       }
       if (items.length === MAX_RESPONSE_ITEMS) {
-        throw new Error("Codex settled-turn projection exceeds the item limit");
+        rejectProjection("item_limit", "exceeds the item limit");
       }
       bytes += responseItemBytes(item);
       if (bytes > MAX_PROJECTION_BYTES) {
-        throw new Error("Codex settled-turn projection exceeds the byte limit");
+        rejectProjection("projection_limit", "exceeds the byte limit");
       }
       items.push(item);
     }
   }
   if (calls.size !== results.size) {
-    throw new Error("Codex settled-turn projection found an incomplete tool transcript");
+    rejectProjection("tool_pairing_rejected", "found an incomplete tool transcript");
   }
   if (results.size === 0) {
-    throw new Error("Codex settled-turn projection found no completed tool result");
+    rejectProjection("tool_pairing_rejected", "found no completed tool result");
   }
   return items;
 }

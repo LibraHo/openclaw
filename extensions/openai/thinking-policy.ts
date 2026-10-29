@@ -15,6 +15,7 @@ import {
   OPENAI_GPT_56_MODEL_ID,
   OPENAI_GPT_6_ASTRA_MODEL_ID,
   OPENAI_GPT_61_SOL_MODEL_ID,
+  OPENAI_GPT_61_TERRA_MODEL_ID,
   resolveOpenAICodexReasoningEfforts,
 } from "./model-route-contract.js";
 import manifest from "./openclaw.plugin.json" with { type: "json" };
@@ -96,13 +97,23 @@ function buildOpenAIThinkingProfile(params: {
   const modelId = normalizeModelId(params.modelId);
   const agentRuntime = normalizeModelId(params.agentRuntime ?? "");
   const codexEfforts = params.compat?.supportedReasoningEfforts?.map(normalizeModelId);
-  if (modelId === OPENAI_GPT_6_ASTRA_MODEL_ID || modelId === OPENAI_GPT_61_SOL_MODEL_ID) {
+  if (
+    modelId === OPENAI_GPT_6_ASTRA_MODEL_ID ||
+    modelId === OPENAI_GPT_61_SOL_MODEL_ID ||
+    modelId === OPENAI_GPT_61_TERRA_MODEL_ID
+  ) {
     const efforts =
       codexEfforts ??
       manifest.modelCatalog.providers.openai.models.find((model) => model.id === modelId)?.compat
         ?.supportedReasoningEfforts ??
       [];
-    return { levels: buildCodexLevels(efforts) };
+    const levels = buildCodexLevels(efforts);
+    return {
+      levels,
+      ...(modelId === OPENAI_GPT_61_TERRA_MODEL_ID && efforts.includes("medium")
+        ? { defaultLevel: "medium" }
+        : {}),
+    };
   }
   const resolvedCodexEfforts =
     params.api === undefined || params.api === "openai-chatgpt-responses"

@@ -8,6 +8,21 @@ import {
 import { escapeSlackMrkdwn } from "./monitor/mrkdwn.js";
 
 describe("chunkSlackMrkdwnText", () => {
+  it("keeps quote-marker escaping sensitive to the following space", () => {
+    expect(markdownToSlackMrkdwnChunks("a > b **bold**> quote", 17)).toEqual([
+      "a &gt; b *bold*> ",
+      "quote",
+    ]);
+  });
+
+  it("measures native tokens containing spaces as complete tokens", () => {
+    expect(markdownToSlackMrkdwnChunks("beta beta <@U1|some one> <https://x|a b> x", 23)).toEqual([
+      "beta beta &lt;@U1|some ",
+      "one&gt; <https://x|a b>",
+      " x",
+    ]);
+  });
+
   it("preserves ordinary whitespace at Slack section boundaries", () => {
     const text = `${"x".repeat(2_998)}  tail`;
     const chunks = chunkSlackMrkdwnText(text, 3_000);
