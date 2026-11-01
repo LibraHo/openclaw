@@ -496,47 +496,60 @@ describe("runCronIsolatedAgentTurn message tool policy", () => {
     });
   });
 
-  it('suppresses automatic exec completion notifications when delivery.mode is "none"', async () => {
-    mockRunCronFallbackPassthrough();
-    resolveCronDeliveryPlanMock.mockReturnValue({
-      requested: false,
-      mode: "none",
-      channel: "topicchat",
-      to: "room#42",
-      threadId: 42,
-    });
-    resolveDeliveryTargetMock.mockResolvedValue({
-      ok: true,
-      channel: "topicchat",
-      to: "room#42",
-      threadId: 42,
-      accountId: undefined,
-      error: undefined,
-    });
-
-    await runCronIsolatedAgentTurn({
-      ...makeParams(),
-      job: makeMessageToolPolicyJob({
-        mode: "none",
+  it.each([
+    { mode: "none", target: "isolated", external: false, suppress: true },
+    { mode: "announce", target: "isolated", external: false, suppress: true },
+    { mode: "webhook", target: "isolated", external: false, suppress: true },
+    { mode: "announce", target: "current", external: false, suppress: false },
+    { mode: "announce", target: "session:retained", external: false, suppress: false },
+    { mode: "announce", target: "isolated", external: true, suppress: false },
+    { mode: "none", target: "isolated", external: true, suppress: true },
+  ] as const)(
+    "keeps child exec completion with its cron delivery owner: $mode/$target/hook=$external",
+    async ({ mode, target, external, suppress }) => {
+      mockRunCronFallbackPassthrough();
+      resolveCronDeliveryPlanMock.mockReturnValue({
+        requested: mode === "announce",
+        mode,
         channel: "topicchat",
         to: "room#42",
         threadId: 42,
-      }),
-    });
-
-    expect(runEmbeddedAgentMock).toHaveBeenCalledTimes(1);
-    expectEmbeddedRunFields({
-      disableMessageTool: false,
-      forceMessageTool: false,
-      messageChannel: "topicchat",
-      messageTo: "room#42",
-      messageThreadId: 42,
-      execOverrides: {
-        notifyOnExit: false,
-        notifyOnExitEmptySuccess: false,
-      },
-    });
-  });
+      });
+      resolveDeliveryTargetMock.mockResolvedValue({
+        ok: true,
+        channel: "topicchat",
+        to: "room#42",
+        threadId: 42,
+        accountId: undefined,
+        error: undefined,
+      });
+      const job: Record<string, unknown> = makeMessageToolPolicyJob(
+        { mode, channel: "topicchat", to: "room#42", threadId: 42 },
+        {
+          kind: "agentTurn",
+          message: "finish the scheduled report",
+          ...(external
+            ? { externalContentSource: "webhook", allowUnsafeExternalContent: true }
+            : {}),
+        },
+      );
+      job.sessionTarget = target;
+      await runCronIsolatedAgentTurn({
+        ...makeParams(),
+        cfg: { tools: { exec: { notifyOnExit: true, notifyOnExitEmptySuccess: true } } },
+        job: job as never,
+      });
+      expect(runEmbeddedAgentMock).toHaveBeenCalledTimes(1);
+      expectEmbeddedRunFields({
+        execOverrides: suppress
+          ? { notifyOnExit: false, notifyOnExitEmptySuccess: false }
+          : undefined,
+      });
+      if (mode === "none") {
+        expectEmbeddedRunFields({ disableMessageTool: false, forceMessageTool: false });
+      }
+    },
+  );
 
   it("preserves explicit delivery targets for agent-initiated messaging when delivery.mode is none", async () => {
     mockRunCronFallbackPassthrough();
@@ -976,7 +989,7 @@ describe("runCronIsolatedAgentTurn message tool policy", () => {
     expect(cliRun.toolsAllow).toBeUndefined();
   });
 
-  it("keeps automatic exec completion notifications when announce delivery is active", async () => {
+  it("lets announce delivery own isolated exec completion notifications", async () => {
     mockRunCronFallbackPassthrough();
     resolveCronDeliveryPlanMock.mockReturnValue(makeAnnounceDeliveryPlan());
 
@@ -986,10 +999,12 @@ describe("runCronIsolatedAgentTurn message tool policy", () => {
     });
 
     expect(runEmbeddedAgentMock).toHaveBeenCalledTimes(1);
-    expect(expectEmbeddedRunFields({}).execOverrides).toBeUndefined();
+    expectEmbeddedRunFields({
+      execOverrides: { notifyOnExit: false, notifyOnExitEmptySuccess: false },
+    });
   });
 
-  it("keeps automatic exec completion notifications when webhook delivery is active", async () => {
+  it("lets webhook delivery own isolated exec completion notifications", async () => {
     mockRunCronFallbackPassthrough();
     resolveCronDeliveryPlanMock.mockReturnValue({
       requested: false,
@@ -1006,7 +1021,9 @@ describe("runCronIsolatedAgentTurn message tool policy", () => {
     });
 
     expect(runEmbeddedAgentMock).toHaveBeenCalledTimes(1);
-    expect(expectEmbeddedRunFields({}).execOverrides).toBeUndefined();
+    expectEmbeddedRunFields({
+      execOverrides: { notifyOnExit: false, notifyOnExitEmptySuccess: false },
+    });
   });
 
   it("disables the message tool when webhook delivery is active", async () => {

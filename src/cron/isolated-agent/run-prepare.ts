@@ -700,7 +700,11 @@ export async function prepareCronRunContext(params: {
         resolvedDelivery,
         deliveryRequested,
         sourceDelivery,
-        suppressExecNotifyOnExit: deliveryPlan.mode === "none",
+        // Scheduled isolated runs own their final delivery. Child exec receipts must not
+        // wake the main session and produce a second, unrelated heartbeat reply.
+        suppressExecNotifyOnExit:
+          deliveryPlan.mode === "none" ||
+          (input.job.sessionTarget === "isolated" && !isExternalHook),
         skillsSnapshot,
         liveSelection,
         useSubagentFallbacks,

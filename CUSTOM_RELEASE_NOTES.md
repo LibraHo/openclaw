@@ -1,4 +1,12 @@
-# Custom OpenClaw 2026.8.35-E
+# Custom OpenClaw 2026.8.35-E1
+
+E1 fixes a second delivery path from isolated scheduled agent turns: background exec exit receipts no longer wake the main session after the cron report or NO_REPLY. The cron owns the result; it must await or poll work whose result matters. Late child failures not observed by that cron do not send separate notifications. Interactive, current-session, retained-session and external-hook behavior is unchanged. No dependency, Node, UI, database-schema or investment-rule changes.
+
+The same generated completion commentary exists in October 27–29 transcripts before E. Historical send receipts are insufficient to attribute its first visible delivery to E or Codex 0.166. The verified ownership defect is repaired without claiming an unproven introducing commit.
+
+Windows heartbeat fixtures close their agent SQLite handles before deleting temporary state, so notification regression tests can clean up correctly.
+
+## Retained E changes
 
 Candidate based on D; all seven D backports retained. Production remains C until a separate deployment. Keep Node24.15.0, UI source, dependency locks, database schema versions and all global/agent default models.
 

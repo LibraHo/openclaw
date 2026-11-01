@@ -7,7 +7,7 @@ import { pathToFileURL } from "node:url";
 assert.equal(JSON.parse(fs.readFileSync("/app/package.json", "utf8")).version, "2026.8.35");
 assert.equal(process.version, "v24.15.0", "Keep the user's existing Node 24.15 runtime");
 const buildInfo = JSON.parse(fs.readFileSync("/app/dist/build-info.json", "utf8"));
-assert.ok(buildInfo.buildId.startsWith("2026.8.35-E-"), "Missing custom E build identity");
+assert.ok(buildInfo.buildId.startsWith("2026.8.35-E1-"), "Missing custom E1 build identity");
 const openAIManifest = JSON.parse(
   fs.readFileSync("/app/dist/extensions/openai/openclaw.plugin.json", "utf8"),
 );

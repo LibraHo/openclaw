@@ -1,10 +1,11 @@
 {
-  "customRelease": "2026.8.35-E",
+  "customRelease": "2026.8.35-E1",
   "upstreamVersion": "2026.8.35",
   "upstreamCommit": "713ba5785d72d6ed1cec971e21307f16cc4234a6",
-  "previousRelease": "2026.8.35-D",
-  "previousSourceCommit": "7fdcb8a1f5b9cec7c1e9d66bc8ae551a38f0ed70",
-  "deployment": "candidate build only; production remains 2026.8.35-C",
+  "previousRelease": "2026.8.35-E",
+  "previousSourceCommit": "153e8051acd19421cca3c9ad4c4a724b8602eb3f",
+  "deployment": "candidate build only; production remains E until verified deployment",
+  "localFixes": ["Isolated scheduled agent turns own exec completion delivery; child exit receipts do not wake the main session. External hooks and interactive turns retain existing behavior."],
   "addedOfficialPRs": [
     160433,
     185310,
